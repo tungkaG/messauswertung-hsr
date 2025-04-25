@@ -1,10 +1,11 @@
 import os
 import pandas as pd
-import tkinter as tk
-from tkinter import filedialog
 import numpy as np
 import matplotlib.pyplot as plt
 from asammdf import MDF
+from docx import Document
+from docx.shared import Inches
+import io
 
 def _get_time_range(signals: dict) -> np.ndarray:
     # Funktion um den Start- und den Endpunkt der Messung zu bestimmen
@@ -22,7 +23,7 @@ def _get_time_range(signals: dict) -> np.ndarray:
         except IndexError as ie:
             print(ie)
     timeVector = np.arange(round(timeStart, 3), round(timeEnd, 3), 0.01)
-    print(f"   Startzeit: {timeStart:.4f}, Endzeit: {timeEnd:.4f}")
+    # print(f"   Startzeit: {timeStart:.4f}, Endzeit: {timeEnd:.4f}")
     return timeVector
 
 
@@ -72,13 +73,13 @@ def process_data(filename, convert=False):
                                                         group=group,
                                                         index=index)
     convertedSignals = _convert_signals(mappedSignals,convert)
-    print()
+    print("Processing data from file:", filename)
     return convertedSignals
 
-def process_mf4_data(mf4_data):
+def process_mf4_data(mf4_data, filename):
     if mf4_data is None or mf4_data.empty:
         print("MF4 data is empty or invalid.")
-        return
+        return None
 
     # State machine to find the first non-512 value from the end, then where it is 512 again
     index_qu_fn_fdr = None
@@ -93,13 +94,13 @@ def process_mf4_data(mf4_data):
 
     if index_qu_fn_fdr is None:
         print("Could not find the required transition in QU_FN_FDR.")
-        return
+        return None
 
     # Search 30 indexes before index_qu_fn_fdr where the difference in DcrInEgoM_psid_Act exceeds 0.008
     index_dcr_in_ego = 2
     for i in range(index_qu_fn_fdr - 30, index_qu_fn_fdr):
         if i > 0 and abs(mf4_data["DcrInEgoM_agwFA_Ste"].iloc[i] - mf4_data["DcrInEgoM_agwFA_Ste"].iloc[i - 1]) > 0.009:
-            index_dcr_in_ego = i-2
+            index_dcr_in_ego = i - 2
             break
 
     # Set the first time index for mf4
@@ -110,18 +111,16 @@ def process_mf4_data(mf4_data):
     psi_peak = mf4_data_reduced["DcrInEgoM_psid_Act"].iloc[
         mf4_data_reduced["DcrInEgoM_psid_Act"].abs().idxmax()
     ]
-    # print(f"Peak gier rate (signed): {psi_peak}")
-        
+
     # Find T_0 by searching from the end where abs(diff(DcrInEgoM_agwFA_Ste)) > 0.002
     T_0 = None
     for i in range(len(mf4_data_reduced["DcrInEgoM_agwFA_Ste"]) - 1, 0, -1):
         if abs(mf4_data_reduced["DcrInEgoM_agwFA_Ste"].iloc[i] - mf4_data_reduced["DcrInEgoM_agwFA_Ste"].iloc[i - 1]) > 0.002:
             T_0 = mf4_data_reduced["time"].iloc[i]
             break
-    if T_0 is not None:
-        print(f"T_0 found at time: {T_0:.3f}s")
-    else:
-        print("T_0 not found.")
+    if T_0 is None:
+        print(f"T_0 nto found for file {filename}")
+        return None
 
     # Plot the data starting from sine wave
     tStartSine = mf4_data_reduced["time"].iloc[0]
@@ -155,11 +154,14 @@ def process_mf4_data(mf4_data):
         label='35% Psid Peak at T_0+1'
     )
 
+    # Check if the value at T_0+1 is within 35% of psi_peak
+    within_35_percent = (abs(psi_at_t0_plus_1) <= abs(psi_peak) * 0.35)
+
     # Find the value of psi at T_0+1.75
     psi_at_t0_plus_1p75 = mf4_data_reduced["DcrInEgoM_psid_Act"].iloc[
         (mf4_data_reduced["time"] - tStartSine).sub(T_0 + 1.75).abs().idxmin()
     ]
-    # Add semi-transparent green box at T+1, where height is 35% of psi_peak
+    # Add semi-transparent green box at T+1.75, where height is 20% of psi_peak
     plt.axvline(x=T_0+1.75, color='black', linestyle='--', label=f'Psid(T_0+1.75)={psi_at_t0_plus_1p75:.3f}')
     plt.fill_betweenx(
         [-psi_peak * 0.2, psi_peak * 0.2],  # Y-range for the box
@@ -167,32 +169,60 @@ def process_mf4_data(mf4_data):
         T_0 + 1.8,  # End of the box
         color='green',
         alpha=0.3,
-        label='20% Psid Peak at T+1.75'
+        label='20% Psid Peak at T_0+1.75'
     )
+
+    # Check if the value at T_0+1.75 is within 20% of psi_peak
+    within_20_percent = (abs(psi_at_t0_plus_1p75) <= abs(psi_peak) * 0.2)
 
     plt.xlabel("Time (s)")
     plt.ylabel("Values")
     plt.title("MF4 Data Reduced Visualization")
     plt.legend()
     plt.grid()
-    plt.show()
 
-    # Plot the whole data 
-    time = mf4_data["time"]
-    plt.figure(figsize=(10, 6))
-    for column in mf4_data.columns:
-        if column != "time" and column != "QU_FN_FDR":
-            plt.plot(time, mf4_data[column], label=column)
-    plt.xlabel("Time (s)")
-    plt.ylabel("Values")
-    plt.title("MF4 Data Visualization")
-    plt.legend()
-    plt.grid()
-    plt.show()
-                    
+    # Save the plot to a bytes object
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plt.close()
+
+    return {
+        "filename": filename,
+        "plot": buf,
+        "psi_peak": psi_peak,
+        "within_35_percent": within_35_percent,
+        "within_20_percent": within_20_percent,
+        "test_passed": within_35_percent and within_20_percent
+    }
+
+def create_word_document(data_list, output_filename):
+    doc = Document()
+    doc.add_heading('MF4 Data Analysis', 0)
+
+    for data in data_list:
+        doc.add_heading(f'File Analysis: {os.path.basename(data["filename"])}', level=1)
+
+        # Add the plot
+        doc.add_picture(data["plot"], width=Inches(6))
+
+        # Add psi peak value
+        doc.add_paragraph(f'Psi Peak: {data["psi_peak"]:.3f}')
+
+        # Add statements for T_0+1 and T_0+1.75
+        doc.add_paragraph(f'Psid at T_0+1 is within 35% range: {data["within_35_percent"]}')
+        doc.add_paragraph(f'Psid at T_0+1.75 is within 20% range: {data["within_20_percent"]}')
+
+        # Add test result
+        doc.add_paragraph(f'Test Passed: {data["test_passed"]}')
+
+    doc.save(output_filename)
+
+    print("Output saved to", output_filename)
+
 if __name__ == "__main__":
     # Initialize an empty list to store dataframes
-    dataframes = []
+    data_list = []
     # Path to the folder containing the files
     folder_path = "Messungen_2025-04-22_V141959_VS0_NA5_LR_AWD_20Z_Winter_SWD_185_Links_SZ8_Manip"
     # Iterate through the folder and find matching .dcm and .mf4 files
@@ -211,22 +241,9 @@ if __name__ == "__main__":
                 mf4_data = process_data(mf4_file, convert=True)
 
                 # Process the mf4 data
-                process_mf4_data(mf4_data)
-                # Combine the data into a single dataframe
-                combined_df = pd.DataFrame({
-                    "DCM": [dcm_dict],
-                    "MF4": [mf4_data]
-                })
-                dataframes.append(combined_df)
+                analysis_data = process_mf4_data(mf4_data, mf4_file)
+                if analysis_data:
+                    data_list.append(analysis_data)
 
-    # Concatenate all dataframes
-    final_df = pd.concat(dataframes, ignore_index=True)
-
-    # Display one of the .dcm and .mf4 files
-    if not final_df.empty:
-        print("DCM Data:")
-        print(final_df["DCM"].iloc[0])
-        print("\nMF4 Data:")
-        print(final_df["MF4"].iloc[0])
-    else:
-        print("No matching .dcm and .mf4 files found.")
+    # Create the Word document with the analysis data
+    create_word_document(data_list, "MF4_Analysis_Report.docx")
