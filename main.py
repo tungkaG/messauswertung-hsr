@@ -55,9 +55,14 @@ def process_data(filename, convert=False):
     signalsInMeas = measurement.channels_db
     
     channel_list = [
+        'Rate_Hor_Z', 
+        'AVL_STEA_FTAX_WHL',
+        'AVL_STEA_DV',
+        'INS_Vel_Hor_X',
+        'EgoMobs_Mobs_vx_Act',
         'DcrInEgoM_psid_Act',
         'DcrInEgoM_agwFA_Ste',
-        'QU_FN_FDR'
+        'QU_FN_FDR',
     ]
     
     mappedSignals = {}
@@ -80,6 +85,49 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         progress_listbox.insert(tk.END, f"MF4 data is empty or invalid for file: {filename}")
         return None
 
+    # Find signal for psid
+    signal_name_psi_d = ""
+    unit_psi_d = ""
+    if "Rate_Hor_Z" in mf4_data.columns:
+        signal_name_psi_d = "Rate_Hor_Z"
+        unit_psi_d = "°/s"
+    elif "DcrInEgoM_psid_Act" in mf4_data.columns:
+        progress_listbox.insert(tk.END, f"Rate_Hor_Z not available for file: {filename}, using DcrInEgoM_psid_Act instead")
+        signal_name_psi_d = "DcrInEgoM_psid_Act"
+        unit_psi_d = "rad/s"
+    else:
+        progress_listbox.insert(tk.END, f"WARNING: Rate_Hor_Z and DcrInEgoM_psid_Act not available for file: {filename}")
+
+    # Find signal for lenkwinkel
+    signal_name_lenkwinkel = ""
+    unit_lenkwinkel = ""
+    if "DcrInEgoM_agwFA_Ste" in mf4_data.columns:
+        signal_name_lenkwinkel = "DcrInEgoM_agwFA_Ste"
+        unit_lenkwinkel = "rad"
+    elif "AVL_STEA_FTAX_WHL" in mf4_data.columns:
+        progress_listbox.insert(tk.END, f"DcrInEgoM_agwFA_Ste not available for file: {filename}, using AVL_STEA_FTAX_WHL instead")
+        signal_name_lenkwinkel = "AVL_STEA_FTAX_WHL"
+        unit_lenkwinkel = "°"
+    elif "AVL_STEA_DV" in mf4_data.columns:
+        progress_listbox.insert(tk.END, f"DcrInEgoM_agwFA_Ste and AVL_STEA_FTAX_WHL not available for file: {filename}, using AVL_STEA_DV instead")
+        signal_name_lenkwinkel = "AVL_STEA_DV"
+        unit_lenkwinkel = "°"
+    else:
+        progress_listbox.insert(tk.END, f"WARNING: DcrInEgoM_agwFA_Ste, AVL_STEA_FTAX_WHL, and AVL_STEA_DV not available for file: {filename}")
+
+    # Find signal for vx
+    signal_name_vx = ""
+    unit_vx = ""
+    if "INS_Vel_Hor_X" in mf4_data.columns:
+        signal_name_vx = "INS_Vel_Hor_X"
+        unit_vx = "m/s"
+    elif "EgoMobs_Mobs_vx_Act" in mf4_data.columns:
+        progress_listbox.insert(tk.END, f"INS_Vel_Hor_X not available for file: {filename}, using EgoMobs_Mobs_vx_Act instead")
+        signal_name_vx = "EgoMobs_Mobs_vx_Act"
+        unit_vx = "m/s"
+    else:
+        progress_listbox.insert(tk.END, f"WARNING: INS_Vel_Hor_X and EgoMobs_Mobs_vx_Act not available for file: {filename}")
+        
     # Find the first non-512 value from the end, then where it is 512 again
     index_qu_fn_fdr = None
     found_non_512 = False
@@ -96,20 +144,20 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         return None
 
     index_dcr_in_ego = 2
-    for i in range(index_qu_fn_fdr - 30, index_qu_fn_fdr):
-        if i > 0 and abs(mf4_data["DcrInEgoM_agwFA_Ste"].iloc[i] - mf4_data["DcrInEgoM_agwFA_Ste"].iloc[i - 1]) > 0.009:
+    for i in range(index_qu_fn_fdr - 80, index_qu_fn_fdr):
+        if i > 0 and abs(mf4_data[signal_name_lenkwinkel].iloc[i] - mf4_data[signal_name_lenkwinkel].iloc[i - 1]) > 0.009:
             index_dcr_in_ego = i - 2
             break
 
     start_index = min(index_dcr_in_ego, index_dcr_in_ego)
     mf4_data_reduced = mf4_data.iloc[start_index:].reset_index(drop=True)
 
-    psi_peak_index = mf4_data_reduced["DcrInEgoM_psid_Act"].abs().idxmax()
-    psi_peak = mf4_data_reduced["DcrInEgoM_psid_Act"].iloc[psi_peak_index]
+    psid_peak_index = mf4_data_reduced[signal_name_psi_d].abs().idxmax()
+    psid_peak = mf4_data_reduced[signal_name_psi_d].iloc[psid_peak_index]
 
     T_0 = None
-    for i in range(psi_peak_index, len(mf4_data_reduced["DcrInEgoM_agwFA_Ste"])):
-        if abs(mf4_data_reduced["DcrInEgoM_agwFA_Ste"].iloc[i] - mf4_data_reduced["DcrInEgoM_agwFA_Ste"].iloc[-1]) < 0.005:
+    for i in range(psid_peak_index, len(mf4_data_reduced[signal_name_lenkwinkel])):
+        if abs(mf4_data_reduced[signal_name_lenkwinkel].iloc[i] - mf4_data_reduced[signal_name_lenkwinkel].iloc[-1]) < 0.005:
             T_0 = mf4_data_reduced["time"].iloc[i]
             break
     if T_0 is None:
@@ -119,53 +167,56 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
     tStartSine = mf4_data_reduced["time"].iloc[0]
     time = mf4_data_reduced["time"] - tStartSine
     T_0 = T_0 - tStartSine
-    plt.figure(figsize=(10, 6))
-    for column in mf4_data_reduced.columns:
-        if column != "time" and column != "QU_FN_FDR":
-            plt.plot(time, mf4_data_reduced[column], label=column)
-    
-    if T_0 is not None:
-        plt.axvline(x=T_0, color='red', linestyle='--', label=f'T_0={T_0:.3f}s')
-    psi_peak_time = mf4_data_reduced["time"].iloc[
-        mf4_data_reduced["DcrInEgoM_psid_Act"].abs().idxmax()
-    ] - tStartSine
-    plt.axvline(x=psi_peak_time, color='green', linestyle='--', label=f'Psid Peak (Time={psi_peak_time:.3f}s, Val={psi_peak:.3f})')
+    # Create subplots for psid and lenkwinkel only
+    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(10, 12), sharex=True)
 
-    psi_at_t0_plus_1 = mf4_data_reduced["DcrInEgoM_psid_Act"].iloc[
+    # Plot psid
+    axes[0].plot(time, mf4_data_reduced[signal_name_psi_d], label=signal_name_psi_d + f" ({unit_psi_d})")
+    axes[0].axvline(x=T_0, color='red', linestyle='--', label=f'T_0={T_0:.3f}s')
+    psid_peak_time = mf4_data_reduced["time"].iloc[psid_peak_index] - tStartSine
+    axes[0].axvline(x=psid_peak_time, color='green', linestyle='--', label=f'Psid Peak (Time={psid_peak_time:.3f}s, Val={psid_peak:.3f} {unit_psi_d})')
+    
+    psid_at_t0_plus_1 = mf4_data_reduced[signal_name_psi_d].iloc[
         (mf4_data_reduced["time"] - tStartSine).sub(T_0 + 1).abs().idxmin()
     ]
-    plt.axvline(x=T_0+1, color='black', linestyle='--', label=f'Psid(T_0+1)={psi_at_t0_plus_1:.3f}')
-    plt.fill_betweenx(
-        [-psi_peak * 0.35, psi_peak * 0.35],
+    axes[0].axvline(x=T_0+1, color='blue', linestyle='--', label=f'Psid(T_0+1)={psid_at_t0_plus_1:.3f} {unit_psi_d}')
+    axes[0].fill_betweenx(
+        [-psid_peak * 0.35, psid_peak * 0.35],
         T_0 + 0.95,
         T_0 + 1.05,
         color='green',
         alpha=0.3,
         label='35% Psid Peak at T_0+1'
     )
+    within_35_percent = (abs(psid_at_t0_plus_1) <= abs(psid_peak) * 0.35)
 
-    within_35_percent = (abs(psi_at_t0_plus_1) <= abs(psi_peak) * 0.35)
-
-    psi_at_t0_plus_1p75 = mf4_data_reduced["DcrInEgoM_psid_Act"].iloc[
+    psid_at_t0_plus_1p75 = mf4_data_reduced[signal_name_psi_d].iloc[
         (mf4_data_reduced["time"] - tStartSine).sub(T_0 + 1.75).abs().idxmin()
     ]
-    plt.axvline(x=T_0+1.75, color='black', linestyle='--', label=f'Psid(T_0+1.75)={psi_at_t0_plus_1p75:.3f}')
-    plt.fill_betweenx(
-        [-psi_peak * 0.2, psi_peak * 0.2],
+    axes[0].axvline(x=T_0+1.75, color='black', linestyle='--', label=f'Psid(T_0+1.75)={psid_at_t0_plus_1p75:.3f} {unit_psi_d}')
+    axes[0].fill_betweenx(
+        [-psid_peak * 0.2, psid_peak * 0.2],
         T_0 + 1.7,
         T_0 + 1.8,
         color='green',
-        alpha=0.3,
+        alpha=0.6,
         label='20% Psid Peak at T_0+1.75'
     )
+    within_20_percent = (abs(psid_at_t0_plus_1p75) <= abs(psid_peak) * 0.2)
 
-    within_20_percent = (abs(psi_at_t0_plus_1p75) <= abs(psi_peak) * 0.2)
+    axes[0].set_ylabel(signal_name_psi_d + f" ({unit_psi_d})")
+    axes[0].legend()
+    axes[0].grid()
 
-    plt.xlabel("Time (s)")
-    plt.ylabel("Values")
-    plt.title("MF4 Data Reduced Visualization")
-    plt.legend()
-    plt.grid()
+    # Plot lenkwinkel
+    axes[1].plot(time, mf4_data_reduced[signal_name_lenkwinkel], label=signal_name_lenkwinkel + f" ({unit_lenkwinkel})")
+    axes[1].axvline(x=T_0, color='red', linestyle='--')
+    axes[1].set_ylabel(signal_name_lenkwinkel + f" ({unit_lenkwinkel})")
+    axes[1].set_xlabel("Time (s)")
+    axes[1].legend()
+    axes[1].grid()
+
+    # plt.suptitle(f'{filename} Analysis')
 
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
@@ -174,13 +225,26 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
 
     progress_listbox.insert(tk.END, f"Processed file: {filename}")
 
+    # Create a dictionary to store signals used
+    signal_info = {
+        "psid": {"name": signal_name_psi_d, "unit": unit_psi_d},
+        "lenkwinkel": {"name": signal_name_lenkwinkel, "unit": unit_lenkwinkel},
+        "vx": {"name": signal_name_vx, "unit": unit_vx}  # still included for completeness
+    }
+
+    # Check vx in km/h
+    vx_begin_kmh = mf4_data_reduced[signal_name_vx][0] * 3.6
+    vx_within_80_pm_2_kmh = (78 <= vx_begin_kmh <= 82)
+
     return {
         "filename": filename,
         "plot": buf,
-        "psi_peak": psi_peak,
+        "psid_peak": psid_peak,
+        "signal_info": signal_info,
         "within_35_percent": within_35_percent,
         "within_20_percent": within_20_percent,
-        "test_passed": within_35_percent and within_20_percent
+        "vx_begin_kmh": vx_begin_kmh,
+        "test_passed": within_35_percent and within_20_percent and vx_within_80_pm_2_kmh
     }
 
 def create_word_document(data_list, output_filename):
@@ -194,12 +258,20 @@ def create_word_document(data_list, output_filename):
         # Add the plot
         doc.add_picture(data["plot"], width=Inches(6))
 
+        # Add signal info
+        doc.add_paragraph(f'Psid Signal Used: {data["signal_info"]["psid"]["name"]} ({data["signal_info"]["psid"]["unit"]})')
+        doc.add_paragraph(f'Lenkwinkel Signal Used: {data["signal_info"]["lenkwinkel"]["name"]} ({data["signal_info"]["lenkwinkel"]["unit"]})')
+        doc.add_paragraph(f'Vx Signal Used: {data["signal_info"]["vx"]["name"]} ({data["signal_info"]["vx"]["unit"]})')
+
         # Add psi peak value
-        doc.add_paragraph(f'Psi Peak: {data["psi_peak"]:.3f}')
+        doc.add_paragraph(f'Psid Peak: {data["psid_peak"]:.3f} {data["signal_info"]["psid"]["unit"]}')
 
         # Add statements for T_0+1 and T_0+1.75
         doc.add_paragraph(f'Psid at T_0+1 is within 35% range: {data["within_35_percent"]}')
         doc.add_paragraph(f'Psid at T_0+1.75 is within 20% range: {data["within_20_percent"]}')
+
+        # Add statements for Vx
+        doc.add_paragraph(f'Vx at in the beginning of SWD: {data["vx_begin_kmh"]:.3f} km/h')
 
         # Add test result
         doc.add_paragraph(f'Test Passed: {data["test_passed"]}')
