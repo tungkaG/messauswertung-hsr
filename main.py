@@ -9,6 +9,8 @@ import io
 import tkinter as tk
 from tkinter import filedialog, messagebox, Listbox
 
+# todo: check what happens when we do doc.add... a None
+
 def _get_time_range(signals: dict) -> np.ndarray:
     # Function to determine the start and end time of the measurement
     if signals is None:
@@ -62,6 +64,8 @@ def process_data(filename, convert=False):
         'EgoMobs_Mobs_vx_Act',
         'DcrInEgoM_psid_Act',
         'DcrInEgoM_agwFA_Ste',
+        'DcrInEgoM_beta_Act',
+        'Ins_beta_Act',
         'QU_FN_FDR',
     ]
     
@@ -80,6 +84,8 @@ def process_data(filename, convert=False):
     return convertedSignals
 
 def process_mf4_data(mf4_data, filename, progress_listbox):
+    warnings = []
+
     # Function to process the MF4 data and perform analysis
     if mf4_data is None or mf4_data.empty:
         progress_listbox.insert(tk.END, f"MF4 data is empty or invalid for file: {filename}")
@@ -97,6 +103,18 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         unit_psi_d = "rad/s"
     else:
         progress_listbox.insert(tk.END, f"WARNING: Rate_Hor_Z and DcrInEgoM_psid_Act not available for file: {filename}")
+        warnings.append(f"WARNING: Rate_Hor_Z and DcrInEgoM_psid_Act not available for this file")
+        return {
+            "filename": filename,
+            "plot": None,
+            "psid_peak": None,
+            "signal_info": None,
+            "within_35_percent": None,
+            "within_20_percent": None,
+            "vx_begin_kmh": None,
+            "warning": warnings,
+            "test_passed": False
+            }
 
     # Find signal for lenkwinkel
     signal_name_lenkwinkel = ""
@@ -114,6 +132,18 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         unit_lenkwinkel = "°"
     else:
         progress_listbox.insert(tk.END, f"WARNING: DcrInEgoM_agwFA_Ste, AVL_STEA_FTAX_WHL, and AVL_STEA_DV not available for file: {filename}")
+        warnings.append(f"WARNING: DcrInEgoM_agwFA_Ste, AVL_STEA_FTAX_WHL, and AVL_STEA_DV not available for this file")
+        return {
+            "filename": filename,
+            "plot": None,
+            "psid_peak": None,
+            "signal_info": None,
+            "within_35_percent": None,
+            "within_20_percent": None,
+            "vx_begin_kmh": None,
+            "warning": warnings,
+            "test_passed": False
+            }
 
     # Find signal for vx
     signal_name_vx = ""
@@ -127,6 +157,40 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         unit_vx = "m/s"
     else:
         progress_listbox.insert(tk.END, f"WARNING: INS_Vel_Hor_X and EgoMobs_Mobs_vx_Act not available for file: {filename}")
+        warnings.append(f"WARNING: INS_Vel_Hor_X and EgoMobs_Mobs_vx_Act not available for file: {filename}")      
+
+    # # Find signal for Querversatz
+    # signal_name_x = ""
+    # unit_x = ""
+    # if "..." in mf4_data.columns:
+    #     signal_name_x = ""
+    #     unit_x = "m"
+    # elif "..." in mf4_data.columns:
+    #     progress_listbox.insert(tk.END, f"... not available for file: {filename}, using ... instead")
+    #     signal_name_x = ""
+    #     unit_x = "m"
+    # else:
+    #     progress_listbox.insert(tk.END, f"WARNING: ... not available for file: {filename}")
+
+    # Find signal for Schwimmwinkel
+    signal_names_schwimmwinkel = ["DcrInEgoM_beta_Act", "Ins_beta_Act"]
+    units_schwimmwinkel = ["rad", "rad"]
+    signal_name_schwimmwinkel = ""
+    unit_schwimmwinkel = ""
+
+    for signal_name, unit in zip(signal_names_schwimmwinkel, units_schwimmwinkel):
+        if signal_name in mf4_data.columns:
+            signal_name_schwimmwinkel += signal_name + ","
+            unit_schwimmwinkel += unit + ","
+            schwimmwinkel = mf4_data[signal_name]
+            if unit == "rad":
+                schwimmwinkel = np.rad2deg(schwimmwinkel)
+            if np.any(np.abs(schwimmwinkel) > 15):
+                warnings.append(f"WARNING: Schwimmwinkel is bigger than 15 degrees for signal {signal_name}")
+    if not signal_name_schwimmwinkel:
+        progress_listbox.insert(tk.END, f"WARNING: Schwimmwinkel not available for file: {filename}")
+        warnings.append("WARNING: Schwimmwinkel not available for this file")
+
         
     # Find the first non-512 value from the end, then where it is 512 again
     index_qu_fn_fdr = None
@@ -138,23 +202,35 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         elif found_non_512 and value == 512:
             index_qu_fn_fdr = i
             break
-
     if index_qu_fn_fdr is None:
         progress_listbox.insert(tk.END, f"Could not find the required transition in QU_FN_FDR for file: {filename}")
-        return None
+        warnings.append(f"Could not find the required transition in QU_FN_FDR for this file")
+        return {
+            "filename": filename,
+            "plot": None,
+            "psid_peak": None,
+            "signal_info": None,
+            "within_35_percent": None,
+            "within_20_percent": None,
+            "vx_begin_kmh": None,
+            "warning": warnings,
+            "test_passed": False
+        }
 
+    # Find first starting time of sine sweep
     index_dcr_in_ego = 2
     for i in range(index_qu_fn_fdr - 80, index_qu_fn_fdr):
         if i > 0 and abs(mf4_data[signal_name_lenkwinkel].iloc[i] - mf4_data[signal_name_lenkwinkel].iloc[i - 1]) > 0.009:
             index_dcr_in_ego = i - 2
             break
-
     start_index = min(index_dcr_in_ego, index_dcr_in_ego)
-    mf4_data_reduced = mf4_data.iloc[start_index:].reset_index(drop=True)
+    mf4_data_reduced = mf4_data.iloc[start_index:].reset_index(drop=True) # Trim data
 
+    # Find maximum psid
     psid_peak_index = mf4_data_reduced[signal_name_psi_d].abs().idxmax()
     psid_peak = mf4_data_reduced[signal_name_psi_d].iloc[psid_peak_index]
 
+    # Find time when sine sweep stopped, starting from time where we found psid_max
     T_0 = None
     for i in range(psid_peak_index, len(mf4_data_reduced[signal_name_lenkwinkel])):
         if abs(mf4_data_reduced[signal_name_lenkwinkel].iloc[i] - mf4_data_reduced[signal_name_lenkwinkel].iloc[-1]) < 0.005:
@@ -162,20 +238,35 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
             break
     if T_0 is None:
         progress_listbox.insert(tk.END, f"T_0 could not be determined for file: {filename}")
-        return
+        warnings.append(f"T_0 could not be determined for this file")
+        return {
+            "filename": filename,
+            "plot": None,
+            "psid_peak": None,
+            "signal_info": None,
+            "within_35_percent": None,
+            "within_20_percent": None,
+            "vx_begin_kmh": None,
+            "warning": warnings,
+            "test_passed": False
+        }
 
     tStartSine = mf4_data_reduced["time"].iloc[0]
     time = mf4_data_reduced["time"] - tStartSine
     T_0 = T_0 - tStartSine
+
     # Create subplots for psid and lenkwinkel only
     fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(10, 12), sharex=True)
 
     # Plot psid
     axes[0].plot(time, mf4_data_reduced[signal_name_psi_d], label=signal_name_psi_d + f" ({unit_psi_d})")
     axes[0].axvline(x=T_0, color='red', linestyle='--', label=f'T_0={T_0:.3f}s')
+
+    # plot psid peak
     psid_peak_time = mf4_data_reduced["time"].iloc[psid_peak_index] - tStartSine
     axes[0].axvline(x=psid_peak_time, color='green', linestyle='--', label=f'Psid Peak (Time={psid_peak_time:.3f}s, Val={psid_peak:.3f} {unit_psi_d})')
     
+    # Criterium 1 for psid
     psid_at_t0_plus_1 = mf4_data_reduced[signal_name_psi_d].iloc[
         (mf4_data_reduced["time"] - tStartSine).sub(T_0 + 1).abs().idxmin()
     ]
@@ -190,6 +281,7 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
     )
     within_35_percent = (abs(psid_at_t0_plus_1) <= abs(psid_peak) * 0.35)
 
+    # Criteirum 2 for psid
     psid_at_t0_plus_1p75 = mf4_data_reduced[signal_name_psi_d].iloc[
         (mf4_data_reduced["time"] - tStartSine).sub(T_0 + 1.75).abs().idxmin()
     ]
@@ -204,6 +296,7 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
     )
     within_20_percent = (abs(psid_at_t0_plus_1p75) <= abs(psid_peak) * 0.2)
 
+    # label and legend for psid plot
     axes[0].set_ylabel(signal_name_psi_d + f" ({unit_psi_d})")
     axes[0].legend()
     axes[0].grid()
@@ -216,8 +309,7 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
     axes[1].legend()
     axes[1].grid()
 
-    # plt.suptitle(f'{filename} Analysis')
-
+    # save graphics
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
     buf.seek(0)
@@ -229,12 +321,16 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
     signal_info = {
         "psid": {"name": signal_name_psi_d, "unit": unit_psi_d},
         "lenkwinkel": {"name": signal_name_lenkwinkel, "unit": unit_lenkwinkel},
-        "vx": {"name": signal_name_vx, "unit": unit_vx}  # still included for completeness
+        "vx": {"name": signal_name_vx, "unit": unit_vx},  # still included for completeness
+        "schwimmwinkel": {"name": signal_name_schwimmwinkel, "unit": unit_schwimmwinkel}
     }
 
     # Check vx in km/h
     vx_begin_kmh = mf4_data_reduced[signal_name_vx][0] * 3.6
     vx_within_80_pm_2_kmh = (78 <= vx_begin_kmh <= 82)
+
+    # Criterium for test passed
+    test_passed = within_35_percent and within_20_percent and vx_within_80_pm_2_kmh
 
     return {
         "filename": filename,
@@ -244,7 +340,8 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         "within_35_percent": within_35_percent,
         "within_20_percent": within_20_percent,
         "vx_begin_kmh": vx_begin_kmh,
-        "test_passed": within_35_percent and within_20_percent and vx_within_80_pm_2_kmh
+        "warning": warnings,
+        "test_passed": test_passed
     }
 
 def create_word_document(data_list, output_filename):
@@ -255,26 +352,35 @@ def create_word_document(data_list, output_filename):
     for data in data_list:
         doc.add_heading(f'File Analysis: {os.path.basename(data["filename"])}', level=1)
 
-        # Add the plot
-        doc.add_picture(data["plot"], width=Inches(6))
+        if data["warning"]:
+            for warning in data["warning"]:
+                doc.add_paragraph(warning, style='ListBullet')
 
-        # Add signal info
-        doc.add_paragraph(f'Psid Signal Used: {data["signal_info"]["psid"]["name"]} ({data["signal_info"]["psid"]["unit"]})')
-        doc.add_paragraph(f'Lenkwinkel Signal Used: {data["signal_info"]["lenkwinkel"]["name"]} ({data["signal_info"]["lenkwinkel"]["unit"]})')
-        doc.add_paragraph(f'Vx Signal Used: {data["signal_info"]["vx"]["name"]} ({data["signal_info"]["vx"]["unit"]})')
+        if data["plot"] is not None:
+            doc.add_picture(data["plot"], width=Inches(6))
 
-        # Add psi peak value
-        doc.add_paragraph(f'Psid Peak: {data["psid_peak"]:.3f} {data["signal_info"]["psid"]["unit"]}')
+        if data["signal_info"]:
+            doc.add_paragraph(f'Psid Signal Used: {data["signal_info"]["psid"]["name"]} ({data["signal_info"]["psid"]["unit"]})')
 
-        # Add statements for T_0+1 and T_0+1.75
-        doc.add_paragraph(f'Psid at T_0+1 is within 35% range: {data["within_35_percent"]}')
-        doc.add_paragraph(f'Psid at T_0+1.75 is within 20% range: {data["within_20_percent"]}')
+            doc.add_paragraph(f'Lenkwinkel Signal Used: {data["signal_info"]["lenkwinkel"]["name"]} ({data["signal_info"]["lenkwinkel"]["unit"]})')
 
-        # Add statements for Vx
-        doc.add_paragraph(f'Vx at in the beginning of SWD: {data["vx_begin_kmh"]:.3f} km/h')
+            doc.add_paragraph(f'Vx Signal Used: {data["signal_info"]["vx"]["name"]} ({data["signal_info"]["vx"]["unit"]})')
 
-        # Add test result
-        doc.add_paragraph(f'Test Passed: {data["test_passed"]}')
+            doc.add_paragraph(f'Schwimmwinkel Signal Used: {data["signal_info"]["schwimmwinkel"]["name"]} ({data["signal_info"]["schwimmwinkel"]["unit"]})')
+
+            doc.add_paragraph(f'Psid Peak: {data["psid_peak"]:.3f} {data["signal_info"]["psid"]["unit"]}')
+
+        if data["within_35_percent"]:
+            doc.add_paragraph(f'Psid at T_0+1 is within 35% range: {data["within_35_percent"]}')
+
+        if data["within_20_percent"]:
+            doc.add_paragraph(f'Psid at T_0+1.75 is within 20% range: {data["within_20_percent"]}')
+
+        if data["vx_begin_kmh"] is not None:
+            doc.add_paragraph(f'Vx at in the beginning of SWD: {data["vx_begin_kmh"]:.3f} km/h')
+
+        if data["test_passed"]:
+            doc.add_paragraph(f'Test Passed: {data["test_passed"]}')
 
     doc.save(output_filename)
     print("Output saved to", os.path.abspath(output_filename))
