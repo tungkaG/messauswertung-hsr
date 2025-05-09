@@ -8,6 +8,8 @@ from docx.shared import Inches
 import io
 import tkinter as tk
 from tkinter import filedialog, messagebox, Listbox
+import pyproj
+import utm
 
 # todo: check what happens when we do doc.add... a None
 
@@ -64,6 +66,12 @@ def process_data(filename, convert=False):
         'EgoMobs_Mobs_vx_Act',
         'DcrInEgoM_psid_Act',
         'DcrInEgoM_agwFA_Ste',
+        'GNSSPositionDegreeOfLatitude',
+        'GNSSPositionDegreeOfLongitude',
+        'INS_Lat_Abs_POI1',
+        'INS_Long_Abs_POI1',
+        'INS_Lat_Abs',
+        'INS_Long_Abs',
         'DcrInEgoM_beta_Act',
         'Ins_beta_Act',
         'QU_FN_FDR',
@@ -85,6 +93,7 @@ def process_data(filename, convert=False):
 
 def process_mf4_data(mf4_data, filename, progress_listbox):
     warnings = []
+    plot_buf = []
 
     # Function to process the MF4 data and perform analysis
     if mf4_data is None or mf4_data.empty:
@@ -157,41 +166,8 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         unit_vx = "m/s"
     else:
         progress_listbox.insert(tk.END, f"WARNING: INS_Vel_Hor_X and EgoMobs_Mobs_vx_Act not available for file: {filename}")
-        warnings.append(f"WARNING: INS_Vel_Hor_X and EgoMobs_Mobs_vx_Act not available for file: {filename}")      
+        warnings.append(f"WARNING: INS_Vel_Hor_X and EgoMobs_Mobs_vx_Act not available for file: {filename}")     
 
-    # # Find signal for Querversatz
-    # signal_name_x = ""
-    # unit_x = ""
-    # if "..." in mf4_data.columns:
-    #     signal_name_x = ""
-    #     unit_x = "m"
-    # elif "..." in mf4_data.columns:
-    #     progress_listbox.insert(tk.END, f"... not available for file: {filename}, using ... instead")
-    #     signal_name_x = ""
-    #     unit_x = "m"
-    # else:
-    #     progress_listbox.insert(tk.END, f"WARNING: ... not available for file: {filename}")
-
-    # Find signal for Schwimmwinkel
-    signal_names_schwimmwinkel = ["DcrInEgoM_beta_Act", "Ins_beta_Act"]
-    units_schwimmwinkel = ["rad", "rad"]
-    signal_name_schwimmwinkel = ""
-    unit_schwimmwinkel = ""
-
-    for signal_name, unit in zip(signal_names_schwimmwinkel, units_schwimmwinkel):
-        if signal_name in mf4_data.columns:
-            signal_name_schwimmwinkel += signal_name + ","
-            unit_schwimmwinkel += unit + ","
-            schwimmwinkel = mf4_data[signal_name]
-            if unit == "rad":
-                schwimmwinkel = np.rad2deg(schwimmwinkel)
-            if np.any(np.abs(schwimmwinkel) > 15):
-                warnings.append(f"WARNING: Schwimmwinkel is bigger than 15 degrees for signal {signal_name}")
-    if not signal_name_schwimmwinkel:
-        progress_listbox.insert(tk.END, f"WARNING: Schwimmwinkel not available for file: {filename}")
-        warnings.append("WARNING: Schwimmwinkel not available for this file")
-
-        
     # Find the first non-512 value from the end, then where it is 512 again
     index_qu_fn_fdr = None
     found_non_512 = False
@@ -252,26 +228,21 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         }
 
     tStartSine = mf4_data_reduced["time"].iloc[0]
-    time = mf4_data_reduced["time"] - tStartSine
     T_0 = T_0 - tStartSine
 
-    # Create subplots for psid and lenkwinkel only
-    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(10, 12), sharex=True)
-
-    # Plot psid
-    axes[0].plot(time, mf4_data_reduced[signal_name_psi_d], label=signal_name_psi_d + f" ({unit_psi_d})")
-    axes[0].axvline(x=T_0, color='red', linestyle='--', label=f'T_0={T_0:.3f}s')
-
+    # Create plots for psid 
+    fig_psid, ax_psid = plt.subplots(figsize=(10, 6))
+    ax_psid.plot(mf4_data_reduced["time"] - tStartSine, mf4_data_reduced[signal_name_psi_d], label=signal_name_psi_d + f" ({unit_psi_d})")
+    ax_psid.axvline(x=T_0, color='red', linestyle='--', label=f'T_0={T_0:.3f}s')
     # plot psid peak
     psid_peak_time = mf4_data_reduced["time"].iloc[psid_peak_index] - tStartSine
-    axes[0].axvline(x=psid_peak_time, color='green', linestyle='--', label=f'Psid Peak (Time={psid_peak_time:.3f}s, Val={psid_peak:.3f} {unit_psi_d})')
-    
+    ax_psid.axvline(x=psid_peak_time, color='green', linestyle='--', label=f'Psid Peak (Time={psid_peak_time:.3f}s, Val={psid_peak:.3f} {unit_psi_d})')
     # Criterium 1 for psid
     psid_at_t0_plus_1 = mf4_data_reduced[signal_name_psi_d].iloc[
         (mf4_data_reduced["time"] - tStartSine).sub(T_0 + 1).abs().idxmin()
     ]
-    axes[0].axvline(x=T_0+1, color='blue', linestyle='--', label=f'Psid(T_0+1)={psid_at_t0_plus_1:.3f} {unit_psi_d}')
-    axes[0].fill_betweenx(
+    ax_psid.axvline(x=T_0+1, color='blue', linestyle='--', label=f'Psid(T_0+1)={psid_at_t0_plus_1:.3f} {unit_psi_d}')
+    ax_psid.fill_betweenx(
         [-psid_peak * 0.35, psid_peak * 0.35],
         T_0 + 0.95,
         T_0 + 1.05,
@@ -280,13 +251,12 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         label='35% Psid Peak at T_0+1'
     )
     within_35_percent = (abs(psid_at_t0_plus_1) <= abs(psid_peak) * 0.35)
-
     # Criteirum 2 for psid
     psid_at_t0_plus_1p75 = mf4_data_reduced[signal_name_psi_d].iloc[
         (mf4_data_reduced["time"] - tStartSine).sub(T_0 + 1.75).abs().idxmin()
     ]
-    axes[0].axvline(x=T_0+1.75, color='black', linestyle='--', label=f'Psid(T_0+1.75)={psid_at_t0_plus_1p75:.3f} {unit_psi_d}')
-    axes[0].fill_betweenx(
+    ax_psid.axvline(x=T_0+1.75, color='black', linestyle='--', label=f'Psid(T_0+1.75)={psid_at_t0_plus_1p75:.3f} {unit_psi_d}')
+    ax_psid.fill_betweenx(
         [-psid_peak * 0.2, psid_peak * 0.2],
         T_0 + 1.7,
         T_0 + 1.8,
@@ -295,46 +265,149 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         label='20% Psid Peak at T_0+1.75'
     )
     within_20_percent = (abs(psid_at_t0_plus_1p75) <= abs(psid_peak) * 0.2)
-
-    # label and legend for psid plot
-    axes[0].set_ylabel(signal_name_psi_d + f" ({unit_psi_d})")
-    axes[0].legend()
-    axes[0].grid()
+    ax_psid.set_ylabel(signal_name_psi_d + f" ({unit_psi_d})") # label and legend for psid plot
+    ax_psid.legend()
+    ax_psid.grid()
+    psid_buf = io.BytesIO() # save to buf
+    fig_psid.savefig(psid_buf, format='png')
+    plt.close(fig_psid)
+    plot_buf.append(psid_buf)
 
     # Plot lenkwinkel
-    axes[1].plot(time, mf4_data_reduced[signal_name_lenkwinkel], label=signal_name_lenkwinkel + f" ({unit_lenkwinkel})")
-    axes[1].axvline(x=T_0, color='red', linestyle='--')
-    axes[1].set_ylabel(signal_name_lenkwinkel + f" ({unit_lenkwinkel})")
-    axes[1].set_xlabel("Time (s)")
-    axes[1].legend()
-    axes[1].grid()
+    fig_lw, ax_lw = plt.subplots(figsize=(10, 6))
+    ax_lw.plot(mf4_data_reduced["time"] - tStartSine, mf4_data_reduced[signal_name_lenkwinkel], label=signal_name_lenkwinkel + f" ({unit_lenkwinkel})")
+    ax_lw.axvline(x=T_0, color='red', linestyle='--')
+    ax_lw.set_ylabel(signal_name_lenkwinkel + f" ({unit_lenkwinkel})")
+    ax_lw.set_xlabel("Time (s)")
+    ax_lw.legend()
+    ax_lw.grid()
+    lenkwinkel_buf = io.BytesIO()
+    fig_lw.savefig(lenkwinkel_buf, format='png')
+    plt.close(fig_lw)
+    plot_buf.append(lenkwinkel_buf)
 
-    # save graphics
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-    plt.close()
+    # Check Querversatz (1.07s after start)
+    signal_names_querversatz = [('GNSSPositionDegreeOfLatitude', 'GNSSPositionDegreeOfLongitude'), ('INS_Lat_Abs_POI1', 'INS_Long_Abs_POI1'), ('INS_Lat_Abs', 'INS_Long_Abs')]
+    signal_name_querversatz = ""
+    unit_querversatz = "m"
 
-    progress_listbox.insert(tk.END, f"Processed file: {filename}")
+    fig_querversatz, ax_querversatz = plt.subplots(figsize=(10, 6))
+    querversatz_buf = io.BytesIO()
+    
+    for signal_name_pair in signal_names_querversatz:
+        lat_signal, lon_signal = signal_name_pair
+        if lat_signal in mf4_data_reduced.columns and lon_signal in mf4_data_reduced.columns:
+        
+            # alle in grad
+            lat1 = mf4_data_reduced[lat_signal][0]
+            lon1 = mf4_data_reduced[lon_signal][0]
+            lat2 = mf4_data_reduced[lat_signal]
+            lon2 = mf4_data_reduced[lon_signal]
+
+            if any(abs(lat2) > 90) or any(abs(lon2) > 180):
+                warnings.append(f"WARNING: {lat_signal},{lon_signal} have unvalid values")
+                continue
+
+            signal_name_querversatz += f"{lat_signal},{lon_signal},"
+            
+            ########################## IN HOUSE HAVERSINE ########################
+            # lat1 = np.deg2rad(lat1)
+            # lon1 = np.deg2rad(lon1)
+            # lat2 = np.deg2rad(lat2)
+            # lon2 = np.deg2rad(lon2)
+
+            # a = np.sin((lat2 - lat1) / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2
+            # dist = 6378.388 * 2.0 * np.arctan2(np.sqrt(a), np.sqrt(1.0-a)) * 1000 # in m
+            
+            # num = np.sin(lon2 - lon1) * np.cos(lat2)
+            # den = np.cos(lat1) * np.sin(lat2) - np.sin(lat1) * np.cos(lat2) * np.cos(lon2 - lon1)
+            # bearing = np.arctan2(num, den)
+
+            # x = dist * np.sin(bearing)
+            # y = dist * np.cos(bearing)
+            ########################## IN HOUSE HAVERSINE ########################
+
+            ########################## pyproj ####################################
+            wgs84 = pyproj.CRS('EPSG:4326')
+            # Automatically determine UTM zone using the first coordinate
+            utm_zone = utm.from_latlon(lat1, lon1)
+            utm_crs = pyproj.CRS(f'EPSG:{32600 + utm_zone[2]}')
+
+            # Create a transformer from WGS84 to the determined UTM zone
+            transformer = pyproj.Transformer.from_crs(wgs84, utm_crs)
+
+            # Convert the array of positions to UTM
+            easthing, northing = transformer.transform(lat2, lon2)
+            y = easthing - easthing[0]
+            x = northing - northing[0]
+            ########################## pyproj ####################################
+
+            initial_heading = np.arctan2(y[1] - y[0], x[1] - x[0])
+            lateral = (x - x[0]) * np.sin(initial_heading) - (y - y[0]) * np.cos(initial_heading)
+            longitudinal = (x - x[0]) * np.cos(initial_heading) + (y - y[0]) * np.sin(initial_heading)
+            index_lenkwinkel_1p07_after = np.argmin(np.abs(mf4_data_reduced["time"] - (tStartSine + 1.07)))
+            lateral_1p07 = lateral[index_lenkwinkel_1p07_after]
+
+            ax_querversatz.plot(mf4_data_reduced["time"] - tStartSine, lateral)
+            ax_querversatz.scatter(mf4_data_reduced["time"].iloc[index_lenkwinkel_1p07_after] - tStartSine, lateral_1p07, marker='x', color='red', label=f"Lateral Displacement at 1.07s: {lateral_1p07:.2f} {unit_querversatz}")
+            ax_querversatz.set_xlabel("Time (s)")
+            ax_querversatz.set_ylabel("Querversatz from " + lat_signal + "," + lon_signal + f" ({unit_querversatz})")
+            ax_querversatz.grid()
+            ax_querversatz.legend()
+            fig_querversatz.savefig(querversatz_buf, format='png')
+            plt.close(fig_querversatz)
+            
+
+            if lateral_1p07 < 1.83:
+                warnings.append(f"WARNING: Querversatz 1.07s after start of SWD is smaller than 1,83 meter for signal pair {signal_name_pair}")
+                break
+            
+    if not signal_name_querversatz:
+        progress_listbox.insert(tk.END, f"WARNING: Querversatz not available for file: {filename}")
+        warnings.append("WARNING: Querversatz not available for this file")
+    else:
+        plot_buf.append(querversatz_buf)
+    
+    # Check vx in km/h
+    vx_begin_kmh = mf4_data_reduced[signal_name_vx][0] * 3.6
+    vx_within_80_pm_2_kmh = (78 <= vx_begin_kmh <= 82)
+
+    # Check Schwimmwinkel
+    signal_names_schwimmwinkel = ["DcrInEgoM_beta_Act", "Ins_beta_Act"]
+    units_schwimmwinkel = ["rad", "rad"]
+    signal_name_schwimmwinkel = ""
+    unit_schwimmwinkel = ""
+
+    for signal_name, unit in zip(signal_names_schwimmwinkel, units_schwimmwinkel):
+        if signal_name in mf4_data_reduced.columns:
+            signal_name_schwimmwinkel += signal_name + ","
+            unit_schwimmwinkel += unit + ","
+            schwimmwinkel = mf4_data_reduced[signal_name]
+            if unit == "rad":
+                schwimmwinkel = np.rad2deg(schwimmwinkel)
+            if np.any(np.abs(schwimmwinkel) > 15):
+                warnings.append(f"WARNING: Schwimmwinkel is bigger than 15 degrees for signal {signal_name}, maximum absolute value: {np.max(abs(schwimmwinkel))} degrees")
+    if not signal_name_schwimmwinkel:
+        progress_listbox.insert(tk.END, f"WARNING: Schwimmwinkel not available for file: {filename}")
+        warnings.append("WARNING: Schwimmwinkel not available for this file")
+
+    # Criterium for test passed
+    test_passed = within_35_percent and within_20_percent and vx_within_80_pm_2_kmh
 
     # Create a dictionary to store signals used
     signal_info = {
         "psid": {"name": signal_name_psi_d, "unit": unit_psi_d},
         "lenkwinkel": {"name": signal_name_lenkwinkel, "unit": unit_lenkwinkel},
         "vx": {"name": signal_name_vx, "unit": unit_vx},  # still included for completeness
-        "schwimmwinkel": {"name": signal_name_schwimmwinkel, "unit": unit_schwimmwinkel}
+        "schwimmwinkel": {"name": signal_name_schwimmwinkel, "unit": unit_schwimmwinkel},
+        "querversatz": {"name": signal_name_querversatz, "unit": unit_querversatz}
     }
-
-    # Check vx in km/h
-    vx_begin_kmh = mf4_data_reduced[signal_name_vx][0] * 3.6
-    vx_within_80_pm_2_kmh = (78 <= vx_begin_kmh <= 82)
-
-    # Criterium for test passed
-    test_passed = within_35_percent and within_20_percent and vx_within_80_pm_2_kmh
+    
+    progress_listbox.insert(tk.END, f"Processed file: {filename}")
 
     return {
         "filename": filename,
-        "plot": buf,
+        "plot": plot_buf,
         "psid_peak": psid_peak,
         "signal_info": signal_info,
         "within_35_percent": within_35_percent,
@@ -357,7 +430,10 @@ def create_word_document(data_list, output_filename):
                 doc.add_paragraph(warning, style='ListBullet')
 
         if data["plot"] is not None:
-            doc.add_picture(data["plot"], width=Inches(6))
+            for plot_buf in data["plot"]:
+                plot_buf.seek(0)  # Reset the file pointer to the beginning
+                doc.add_picture(plot_buf, width=Inches(6))
+                doc.add_paragraph()
 
         if data["signal_info"]:
             doc.add_paragraph(f'Psid Signal Used: {data["signal_info"]["psid"]["name"]} ({data["signal_info"]["psid"]["unit"]})')
@@ -367,6 +443,8 @@ def create_word_document(data_list, output_filename):
             doc.add_paragraph(f'Vx Signal Used: {data["signal_info"]["vx"]["name"]} ({data["signal_info"]["vx"]["unit"]})')
 
             doc.add_paragraph(f'Schwimmwinkel Signal Used: {data["signal_info"]["schwimmwinkel"]["name"]} ({data["signal_info"]["schwimmwinkel"]["unit"]})')
+
+            doc.add_paragraph(f'Querversatz Signal Used: {data["signal_info"]["querversatz"]["name"]} ({data["signal_info"]["querversatz"]["unit"]})')
 
             doc.add_paragraph(f'Psid Peak: {data["psid_peak"]:.3f} {data["signal_info"]["psid"]["unit"]}')
 
