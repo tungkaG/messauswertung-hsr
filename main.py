@@ -170,19 +170,50 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         progress_listbox.insert(tk.END, f"WARNING: INS_Vel_Hor_X and EgoMobs_Mobs_vx_Act not available for file: {filename}")
         warnings.append(f"WARNING: INS_Vel_Hor_X and EgoMobs_Mobs_vx_Act not available for file: {filename}")     
 
-    # Find the first non-512 value from the end, then where it is 512 again
-    index_qu_fn_fdr = None
-    found_non_512 = False
-    for i in range(len(mf4_data["QU_FN_FDR"]) - 1, -1, -1):
-        value = mf4_data["QU_FN_FDR"].iloc[i]
-        if not found_non_512 and value != 512:
-            found_non_512 = True
-        elif found_non_512 and value == 512:
-            index_qu_fn_fdr = i
+    # # Find the first non-512 value from the end, then where it is 512 again
+    # index_qu_fn_fdr = None
+    # found_non_512 = False
+    # for i in range(len(mf4_data["QU_FN_FDR"]) - 1, -1, -1):
+    #     value = mf4_data["QU_FN_FDR"].iloc[i]
+    #     if not found_non_512 and value != 512:
+    #         found_non_512 = True
+    #     elif found_non_512 and value == 512:
+    #         index_qu_fn_fdr = i
+    #         break
+    # if index_qu_fn_fdr is None:
+    #     progress_listbox.insert(tk.END, f"Could not find the required transition in QU_FN_FDR for file: {filename}")
+    #     warnings.append(f"Could not find the required transition in QU_FN_FDR for this file")
+    #     return {
+    #         "filename": filename,
+    #         "plot": None,
+    #         "psid_peak": None,
+    #         "signal_info": None,
+    #         "within_35_percent": None,
+    #         "within_20_percent": None,
+    #         "vx_begin_kmh": None,
+    #         "warning": warnings,
+    #         "test_passed": False
+    #     }
+
+    # # Find first starting time of sine sweep
+    # index_dcr_in_ego = 2
+    # for i in range(index_qu_fn_fdr, len(mf4_data[signal_name_lenkwinkel])):
+    #     if i > 0 and abs(mf4_data[signal_name_lenkwinkel].iloc[i] - mf4_data[signal_name_lenkwinkel].iloc[i - 1]) > 0.009:
+    #         index_dcr_in_ego = i - 2
+    #         break
+    # start_index = min(index_dcr_in_ego, index_dcr_in_ego)
+
+    # Find start of SWD (QN_FN_FDR = 512 and gradient of d_lenkwinkel/dt > 0.009)
+    start_index = 0
+    time_diff = round(mf4_data["time"][1] - mf4_data["time"][0],3) # 2 decs behind 0
+    distance_in_index_after_0p1_s = int(0.1 / time_diff)
+    for i in range(len(mf4_data[signal_name_lenkwinkel]) - distance_in_index_after_0p1_s): # search +-80 samples when QN_FN_FDR is activated, and where gradient is > 0.009
+        if any(mf4_data["QU_FN_FDR"][max(i-80,0):min(i+80,len(mf4_data[signal_name_lenkwinkel]) - distance_in_index_after_0p1_s)]  != 512) and abs(mf4_data[signal_name_lenkwinkel].iloc[i + distance_in_index_after_0p1_s] - mf4_data[signal_name_lenkwinkel].iloc[i]) / 0.1 > 0.44:
+            start_index = i
             break
-    if index_qu_fn_fdr is None:
-        progress_listbox.insert(tk.END, f"Could not find the required transition in QU_FN_FDR for file: {filename}")
-        warnings.append(f"Could not find the required transition in QU_FN_FDR for this file")
+    if start_index == 0:
+        progress_listbox.insert(tk.END, f"WARNING: Could not find the start of SWD for file: {filename}")
+        warnings.append(f"WARNING: Could not find the start of SWD for this file")
         return {
             "filename": filename,
             "plot": None,
@@ -194,14 +225,6 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
             "warning": warnings,
             "test_passed": False
         }
-
-    # Find first starting time of sine sweep
-    index_dcr_in_ego = 2
-    for i in range(index_qu_fn_fdr - 80, index_qu_fn_fdr):
-        if i > 0 and abs(mf4_data[signal_name_lenkwinkel].iloc[i] - mf4_data[signal_name_lenkwinkel].iloc[i - 1]) > 0.009:
-            index_dcr_in_ego = i - 2
-            break
-    start_index = min(index_dcr_in_ego, index_dcr_in_ego)
     mf4_data_reduced = mf4_data.iloc[start_index:].reset_index(drop=True) # Trim data
 
     # Find maximum psid
@@ -211,15 +234,15 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
     # Find time when sine sweep stopped (compare now value to last value), starting from time where we found psid_max
     T_0 = None
     state = 0
-    for i in range(psid_peak_index, len(mf4_data_reduced[signal_name_lenkwinkel]) - 1):
+    for i in range(psid_peak_index, len(mf4_data_reduced[signal_name_lenkwinkel]) - distance_in_index_after_0p1_s):
         if state == 0:
-            if abs(mf4_data_reduced[signal_name_lenkwinkel].iloc[i] - mf4_data_reduced[signal_name_lenkwinkel].iloc[i+1]) <= 0:
+            if abs((mf4_data_reduced[signal_name_lenkwinkel].iloc[i] - mf4_data_reduced[signal_name_lenkwinkel].iloc[i+distance_in_index_after_0p1_s])/0.1) <= 0:
                 state = 1
         elif state == 1:
-            if abs(mf4_data_reduced[signal_name_lenkwinkel].iloc[i] - mf4_data_reduced[signal_name_lenkwinkel].iloc[i+1]) > 0.005:
+            if abs((mf4_data_reduced[signal_name_lenkwinkel].iloc[i] - mf4_data_reduced[signal_name_lenkwinkel].iloc[i+distance_in_index_after_0p1_s])/0.1) > 0.2:
                 state = 2
         elif state == 2:
-            if abs(mf4_data_reduced[signal_name_lenkwinkel].iloc[i] - mf4_data_reduced[signal_name_lenkwinkel].iloc[i+1]) < 0.005:
+            if abs((mf4_data_reduced[signal_name_lenkwinkel].iloc[i] - mf4_data_reduced[signal_name_lenkwinkel].iloc[i+distance_in_index_after_0p1_s])/0.1) < 0.2:
                 T_0 = mf4_data_reduced["time"].iloc[i]
                 break
 
