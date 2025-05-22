@@ -36,6 +36,8 @@ def _convert_signals(signals: dict, convert: bool):
     if convert:
         df = pd.DataFrame(time_vector, columns=['time'])
         for key, signal in signals.items():
+            if len(signal.samples) == 0:
+                continue
             syncSignal = signal.interp(time_vector, 0, 0)
             dataSignal = list(zip(syncSignal.timestamps, syncSignal.samples))
             dfSignal = pd.DataFrame(dataSignal, columns=['time', key])
@@ -206,12 +208,21 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
     psid_peak_index = mf4_data_reduced[signal_name_psi_d].abs().idxmax()
     psid_peak = mf4_data_reduced[signal_name_psi_d].iloc[psid_peak_index]
 
-    # Find time when sine sweep stopped, starting from time where we found psid_max
+    # Find time when sine sweep stopped (compare now value to last value), starting from time where we found psid_max
     T_0 = None
-    for i in range(psid_peak_index, len(mf4_data_reduced[signal_name_lenkwinkel])):
-        if abs(mf4_data_reduced[signal_name_lenkwinkel].iloc[i] - mf4_data_reduced[signal_name_lenkwinkel].iloc[-1]) < 0.005:
-            T_0 = mf4_data_reduced["time"].iloc[i]
-            break
+    state = 0
+    for i in range(psid_peak_index, len(mf4_data_reduced[signal_name_lenkwinkel]) - 1):
+        if state == 0:
+            if abs(mf4_data_reduced[signal_name_lenkwinkel].iloc[i] - mf4_data_reduced[signal_name_lenkwinkel].iloc[i+1]) <= 0:
+                state = 1
+        elif state == 1:
+            if abs(mf4_data_reduced[signal_name_lenkwinkel].iloc[i] - mf4_data_reduced[signal_name_lenkwinkel].iloc[i+1]) > 0.005:
+                state = 2
+        elif state == 2:
+            if abs(mf4_data_reduced[signal_name_lenkwinkel].iloc[i] - mf4_data_reduced[signal_name_lenkwinkel].iloc[i+1]) < 0.005:
+                T_0 = mf4_data_reduced["time"].iloc[i]
+                break
+
     if T_0 is None:
         progress_listbox.insert(tk.END, f"T_0 could not be determined for file: {filename}")
         warnings.append(f"T_0 could not be determined for this file")
@@ -363,6 +374,7 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
                 break
             
     if not signal_name_querversatz:
+        plt.close(fig_querversatz)
         progress_listbox.insert(tk.END, f"WARNING: Querversatz not available for file: {filename}")
         warnings.append("WARNING: Querversatz not available for this file")
     else:
@@ -425,7 +437,7 @@ def create_word_document(data_list, output_filename):
     for data in data_list:
         doc.add_heading(f'File Analysis: {os.path.basename(data["filename"])}', level=1)
 
-        if data["warning"]:
+        if data["warning"] is not None:
             for warning in data["warning"]:
                 doc.add_paragraph(warning, style='ListBullet')
 
@@ -435,7 +447,7 @@ def create_word_document(data_list, output_filename):
                 doc.add_picture(plot_buf, width=Inches(6))
                 doc.add_paragraph()
 
-        if data["signal_info"]:
+        if data["signal_info"] is not None:
             doc.add_paragraph(f'Psid Signal Used: {data["signal_info"]["psid"]["name"]} ({data["signal_info"]["psid"]["unit"]})')
 
             doc.add_paragraph(f'Lenkwinkel Signal Used: {data["signal_info"]["lenkwinkel"]["name"]} ({data["signal_info"]["lenkwinkel"]["unit"]})')
@@ -448,16 +460,16 @@ def create_word_document(data_list, output_filename):
 
             doc.add_paragraph(f'Psid Peak: {data["psid_peak"]:.3f} {data["signal_info"]["psid"]["unit"]}')
 
-        if data["within_35_percent"]:
+        if data["within_35_percent"] is not None:
             doc.add_paragraph(f'Psid at T_0+1 is within 35% range: {data["within_35_percent"]}')
 
-        if data["within_20_percent"]:
+        if data["within_20_percent"] is not None:
             doc.add_paragraph(f'Psid at T_0+1.75 is within 20% range: {data["within_20_percent"]}')
 
         if data["vx_begin_kmh"] is not None:
             doc.add_paragraph(f'Vx at in the beginning of SWD: {data["vx_begin_kmh"]:.3f} km/h')
 
-        if data["test_passed"]:
+        if data["test_passed"] is not None:
             doc.add_paragraph(f'Test Passed: {data["test_passed"]}')
 
     doc.save(output_filename)
