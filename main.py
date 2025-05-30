@@ -50,7 +50,7 @@ def _convert_signals(signals: dict, convert: bool):
         signals['time'] = time_vector
         return signals
 
-def process_data(filename, convert=False):
+def extract_data(filename, convert=False):
     # Function to process the MDF4 file and extract the required signals
     try:
         measurement = MDF(filename)
@@ -60,7 +60,7 @@ def process_data(filename, convert=False):
     
     signalsInMeas = measurement.channels_db
     
-    channel_list = [
+    analysis_channel_list = [
         'Rate_Hor_Z', 
         'AVL_STEA_FTAX_WHL',
         'AVL_STEA_DV',
@@ -80,7 +80,7 @@ def process_data(filename, convert=False):
     ]
     
     mappedSignals = {}
-    for signal in channel_list:
+    for signal in analysis_channel_list:
         for sub, indexgroup in signalsInMeas.items():
             if sub == signal:
                 indexFindings = indexgroup[0]
@@ -89,11 +89,35 @@ def process_data(filename, convert=False):
                 mappedSignals[signal] = measurement.get(signal,
                                                         group=group,
                                                         index=index)
-    convertedSignals = _convert_signals(mappedSignals, convert)
-    print("Processing data from file:", filename)
-    return convertedSignals
+    analysis_data_converted = _convert_signals(mappedSignals, convert)
+    
+    manipulated_signals_channel_list = [
+        'EgoWhlRtab_rFL_Whl',
+        'EgoWhlRtab_rFR_Whl',
+        'EgoWhlRtab_rRL_Whl',
+        'EgoWhlRtab_rRR_Whl',
+        'EgoWhlRtab_rFL_WhlLut',
+        'EgoWhlRtab_rFR_WhlLut',
+        'EgoWhlRtab_rRL_WhlLut',
+        'EgoWhlRtab_rRR_WhlLut',
+    ]
 
-def process_mf4_data(mf4_data, filename, progress_listbox):
+    mappedSignals = {}
+    for signal in manipulated_signals_channel_list:
+        for sub, indexgroup in signalsInMeas.items():
+            if sub == signal:
+                indexFindings = indexgroup[0]
+                group = indexFindings[0]
+                index = indexFindings[1]
+                mappedSignals[signal] = measurement.get(signal,
+                                                        group=group,
+                                                        index=index)
+    manipulated_signals_data_converted = _convert_signals(mappedSignals, convert)
+
+    print("Processing analysis data from file:", filename)
+    return analysis_data_converted, manipulated_signals_data_converted
+
+def process_mf4_analysis_data(mf4_data, filename, progress_listbox):
     warnings = []
     plot_buf = []
 
@@ -169,39 +193,6 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
     else:
         progress_listbox.insert(tk.END, f"WARNING: INS_Vel_Hor_X and EgoMobs_Mobs_vx_Act not available for file: {filename}")
         warnings.append(f"WARNING: INS_Vel_Hor_X and EgoMobs_Mobs_vx_Act not available for file: {filename}")     
-
-    # # Find the first non-512 value from the end, then where it is 512 again
-    # index_qu_fn_fdr = None
-    # found_non_512 = False
-    # for i in range(len(mf4_data["QU_FN_FDR"]) - 1, -1, -1):
-    #     value = mf4_data["QU_FN_FDR"].iloc[i]
-    #     if not found_non_512 and value != 512:
-    #         found_non_512 = True
-    #     elif found_non_512 and value == 512:
-    #         index_qu_fn_fdr = i
-    #         break
-    # if index_qu_fn_fdr is None:
-    #     progress_listbox.insert(tk.END, f"Could not find the required transition in QU_FN_FDR for file: {filename}")
-    #     warnings.append(f"Could not find the required transition in QU_FN_FDR for this file")
-    #     return {
-    #         "filename": filename,
-    #         "plot": None,
-    #         "psid_peak": None,
-    #         "signal_info": None,
-    #         "within_35_percent": None,
-    #         "within_20_percent": None,
-    #         "vx_begin_kmh": None,
-    #         "warning": warnings,
-    #         "test_passed": False
-    #     }
-
-    # # Find first starting time of sine sweep
-    # index_dcr_in_ego = 2
-    # for i in range(index_qu_fn_fdr, len(mf4_data[signal_name_lenkwinkel])):
-    #     if i > 0 and abs(mf4_data[signal_name_lenkwinkel].iloc[i] - mf4_data[signal_name_lenkwinkel].iloc[i - 1]) > 0.009:
-    #         index_dcr_in_ego = i - 2
-    #         break
-    # start_index = min(index_dcr_in_ego, index_dcr_in_ego)
 
     # Find start of SWD (QN_FN_FDR = 512 and gradient of d_lenkwinkel/dt > 0.009)
     start_index = 0
@@ -452,48 +443,108 @@ def process_mf4_data(mf4_data, filename, progress_listbox):
         "test_passed": test_passed
     }
 
-def create_word_document(data_list, output_filename):
+def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
+    plot_buf = []
+
+    # Function to process the manipulated signals data
+    if mf4_data is None or mf4_data.empty:
+        progress_listbox.insert(tk.END, f"Manipulated signals data is empty or invalid for file: {filename}")
+        return {
+            "filename": filename,
+            "plot": None,
+        }
+
+    # Check whether rDyn is manipulated -------------------------------------------------------------------
+    fig_rDyn, ax_rDyn = plt.subplots(figsize=(10, 6))
+    rDyn_is_manipulated = False
+    if "EgoWhlRtab_rFL_Whl" in mf4_data.columns and "EgoWhlRtab_rFL_WhlLut" in mf4_data.columns:
+        if any(abs(mf4_data["EgoWhlRtab_rFL_Whl"] - mf4_data["EgoWhlRtab_rFL_WhlLut"]) >= 0.03):
+            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rFL_Whl'], label='EgoWhlRtab_rFL_Whl')
+            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rFL_WhlLut'], label='EgoWhlRtab_rFL_WhlLut')
+            rDyn_is_manipulated = True
+    if "EgoWhlRtab_rFR_Whl" in mf4_data.columns and "EgoWhlRtab_rFR_WhlLut" in mf4_data.columns:
+        if any(abs(mf4_data["EgoWhlRtab_rFR_Whl"] - mf4_data["EgoWhlRtab_rFR_WhlLut"]) >= 0.03):
+            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rFR_Whl'], label='EgoWhlRtab_rFR_Whl')
+            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rFR_WhlLut'], label='EgoWhlRtab_rFLR_WhlLut')
+            rDyn_is_manipulated = True
+    if "EgoWhlRtab_rRL_Whl" in mf4_data.columns and "EgoWhlRtab_rRL_WhlLut" in mf4_data.columns:
+        if any(abs(mf4_data["EgoWhlRtab_rRL_Whl"] - mf4_data["EgoWhlRtab_rRL_WhlLut"]) >= 0.03):
+            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rRL_Whl'], label='EgoWhlRtab_rRL_Whl')
+            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rRL_WhlLut'], label='EgoWhlRtab_rRL_WhlLut')
+            rDyn_is_manipulated = True
+    if "EgoWhlRtab_rRR_Whl" in mf4_data.columns and "EgoWhlRtab_rRR_WhlLut" in mf4_data.columns:
+        if any(abs(mf4_data["EgoWhlRtab_rRR_Whl"] - mf4_data["EgoWhlRtab_rRR_WhlLut"]) >= 0.03):
+            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rRR_Whl'], label='EgoWhlRtab_rRR_Whl')
+            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rRR_WhlLut'], label='EgoWhlRtab_rRR_WhlLut')
+            rDyn_is_manipulated = True
+    if rDyn_is_manipulated:
+        ax_rDyn.set_xlabel("Time (s)")
+        ax_rDyn.set_ylabel("rDyn (m)")
+        ax_rDyn.legend()
+        ax_rDyn.grid()
+        rDyn_buf = io.BytesIO()
+        fig_rDyn.savefig(rDyn_buf, format='png')
+        plt.close(fig_rDyn)
+        plot_buf.append(rDyn_buf)
+    # Check whether rDyn is manipulated ----------------------------------------------------------------------
+
+    # Check whether vx or vy is manipulated
+
+    return {
+        "filename": filename,
+        "plot": plot_buf,
+    }
+
+
+def create_word_document(analysis_data_list, manipulated_signals_data_list, output_filename):
     # Function to create a Word document with analysis results
     doc = Document()
     doc.add_heading('MF4 Data Analysis', 0)
 
-    for data in data_list:
-        doc.add_heading(f'File Analysis: {os.path.basename(data["filename"])}', level=1)
+    for (analysis_data, manipulated_signals_data) in zip(analysis_data_list, manipulated_signals_data_list):
+        doc.add_heading(f'File Analysis: {os.path.basename(analysis_data["filename"])}', level=1)
 
-        if data["warning"] is not None:
-            for warning in data["warning"]:
+        if analysis_data["warning"] is not None:
+            for warning in analysis_data["warning"]:
                 doc.add_paragraph(warning, style='ListBullet')
 
-        if data["plot"] is not None:
-            for plot_buf in data["plot"]:
+        if analysis_data["plot"] is not None:
+            for plot_buf in analysis_data["plot"]:
                 plot_buf.seek(0)  # Reset the file pointer to the beginning
                 doc.add_picture(plot_buf, width=Inches(6))
                 doc.add_paragraph()
+        
+        if manipulated_signals_data["plot"] is not None:
+            doc.add_paragraph('Manipulated Signals:')
+            for plot_buf in manipulated_signals_data["plot"]:
+                plot_buf.seek(0)
+                doc.add_picture(plot_buf, width=Inches(6))
+                doc.add_paragraph()
 
-        if data["signal_info"] is not None:
-            doc.add_paragraph(f'Psid Signal Used: {data["signal_info"]["psid"]["name"]} ({data["signal_info"]["psid"]["unit"]})')
+        if analysis_data["signal_info"] is not None:
+            doc.add_paragraph(f'Psid Signal Used: {analysis_data["signal_info"]["psid"]["name"]} ({analysis_data["signal_info"]["psid"]["unit"]})')
 
-            doc.add_paragraph(f'Lenkwinkel Signal Used: {data["signal_info"]["lenkwinkel"]["name"]} ({data["signal_info"]["lenkwinkel"]["unit"]})')
+            doc.add_paragraph(f'Lenkwinkel Signal Used: {analysis_data["signal_info"]["lenkwinkel"]["name"]} ({analysis_data["signal_info"]["lenkwinkel"]["unit"]})')
 
-            doc.add_paragraph(f'Vx Signal Used: {data["signal_info"]["vx"]["name"]} ({data["signal_info"]["vx"]["unit"]})')
+            doc.add_paragraph(f'Vx Signal Used: {analysis_data["signal_info"]["vx"]["name"]} ({analysis_data["signal_info"]["vx"]["unit"]})')
 
-            doc.add_paragraph(f'Schwimmwinkel Signal Used: {data["signal_info"]["schwimmwinkel"]["name"]} ({data["signal_info"]["schwimmwinkel"]["unit"]})')
+            doc.add_paragraph(f'Schwimmwinkel Signal Used: {analysis_data["signal_info"]["schwimmwinkel"]["name"]} ({analysis_data["signal_info"]["schwimmwinkel"]["unit"]})')
 
-            doc.add_paragraph(f'Querversatz Signal Used: {data["signal_info"]["querversatz"]["name"]} ({data["signal_info"]["querversatz"]["unit"]})')
+            doc.add_paragraph(f'Querversatz Signal Used: {analysis_data["signal_info"]["querversatz"]["name"]} ({analysis_data["signal_info"]["querversatz"]["unit"]})')
 
-            doc.add_paragraph(f'Psid Peak: {data["psid_peak"]:.3f} {data["signal_info"]["psid"]["unit"]}')
+            doc.add_paragraph(f'Psid Peak: {analysis_data["psid_peak"]:.3f} {analysis_data["signal_info"]["psid"]["unit"]}')
 
-        if data["within_35_percent"] is not None:
-            doc.add_paragraph(f'Psid at T_0+1 is within 35% range: {data["within_35_percent"]}')
+        if analysis_data["within_35_percent"] is not None:
+            doc.add_paragraph(f'Psid at T_0+1 is within 35% range: {analysis_data["within_35_percent"]}')
 
-        if data["within_20_percent"] is not None:
-            doc.add_paragraph(f'Psid at T_0+1.75 is within 20% range: {data["within_20_percent"]}')
+        if analysis_data["within_20_percent"] is not None:
+            doc.add_paragraph(f'Psid at T_0+1.75 is within 20% range: {analysis_data["within_20_percent"]}')
 
-        if data["vx_begin_kmh"] is not None:
-            doc.add_paragraph(f'Vx at in the beginning of SWD: {data["vx_begin_kmh"]:.3f} km/h')
+        if analysis_data["vx_begin_kmh"] is not None:
+            doc.add_paragraph(f'Vx at in the beginning of SWD: {analysis_data["vx_begin_kmh"]:.3f} km/h')
 
-        if data["test_passed"] is not None:
-            doc.add_paragraph(f'Test Passed: {data["test_passed"]}')
+        if analysis_data["test_passed"] is not None:
+            doc.add_paragraph(f'Test Passed: {analysis_data["test_passed"]}')
 
     doc.save(output_filename)
     print("Output saved to", os.path.abspath(output_filename))
@@ -513,21 +564,25 @@ def select_folder_and_process():
         root.destroy()
         return
 
-    data_list = []
+    analysis_data_list = []
+    manipulated_signals_data_list = []
     for file in os.listdir(folder_path):
         if file.endswith(".mf4"):
             mf4_file = os.path.join(folder_path, file)
             progress_listbox.insert(tk.END, f"Processing file: {mf4_file}")
             root.update_idletasks()  # Update the GUI to show progress
 
-            mf4_data = process_data(mf4_file, convert=True)
-            analysis_data = process_mf4_data(mf4_data, mf4_file, progress_listbox)
-            if analysis_data:
-                data_list.append(analysis_data)
+            mf4_analysis_data, mf4_manipulated_signals_data = extract_data(mf4_file, convert=True)
+            analysis_data = process_mf4_analysis_data(mf4_analysis_data, mf4_file, progress_listbox)
+            manipulated_signals_data = process_mf4_manipulated_signals_data(mf4_manipulated_signals_data, mf4_file, progress_listbox)
+            if analysis_data is not None:
+                analysis_data_list.append(analysis_data)
+            if manipulated_signals_data is not None:
+                manipulated_signals_data_list.append(manipulated_signals_data)
 
-    if data_list:
+    if len(analysis_data_list) > 0 and len(manipulated_signals_data_list) > 0:
         output_filename = os.path.join(folder_path, "MF4_Analysis_Report.docx")
-        create_word_document(data_list, output_filename)
+        create_word_document(analysis_data_list, manipulated_signals_data_list,output_filename)
         progress_listbox.insert(tk.END, f"Analysis complete. Report saved to:\n{os.path.abspath(output_filename)}")
         messagebox.showinfo("Success", f"Analysis complete. Report saved to:\n{os.path.abspath(output_filename)}")
     else:
