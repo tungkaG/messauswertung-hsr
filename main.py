@@ -92,6 +92,7 @@ def extract_data(filename, convert=False):
     analysis_data_converted = _convert_signals(mappedSignals, convert)
     
     manipulated_signals_channel_list = [
+        # rDyn
         'EgoWhlRtab_rFL_Whl',
         'EgoWhlRtab_rFR_Whl',
         'EgoWhlRtab_rRL_Whl',
@@ -101,11 +102,21 @@ def extract_data(filename, convert=False):
         'EgoWhlRtab_rRL_WhlLut',
         'EgoWhlRtab_rRR_WhlLut',
 
+        # vx and vy
         'EgoMobs_Mobs_vx_Act',
         'EgoMobs_Mobs_vy_Act',
         'DcrInEgoM_v_Act',
         'DcrInEgoM_vx_Act',
         'DcrInEgoM_vy_Act',  
+
+        # Steering angle
+        'EgoSteaProc_agFA_Whl',
+        'EgoStea_agFA_WhlRaw',
+        'EgoStea_agFA_WhlOfs',
+        'EgoStea_agFA_WhlOfsLt',
+        'EgoStea_agFA_WhlOfsPni',
+        'EgoStea_agFA_WhlOfsPsid',
+        
     ]
 
     mappedSignals = {}
@@ -496,11 +507,6 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
     # Check whether rDyn is manipulated ----------------------------------------------------------------------
     
     # Check whether vx or vy is manipulated ------------------------------------------------------------------
-        # 'EgoMobs_Mobs_vx_Act',
-        # 'EgoMobs_Mobs_vy_Act',
-        # 'DcrInEgoM_v_Act',
-        # 'DcrInEgoM_vx_Act',
-        # 'DcrInEgoM_vy_Act',  
     fig_v, ax_v = plt.subplots(figsize=(10, 6))
     v_is_manipulated = False
     if "EgoMobs_Mobs_vx_Act" in mf4_data.columns and "DcrInEgoM_vx_Act" in mf4_data.columns:
@@ -529,6 +535,51 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         plt.close(fig_rDyn)
         plot_buf.append(v_buf)
     # Check whether vx or vy is manipulated ------------------------------------------------------------------
+    
+    # Check whether steering angle is manipulated -----------------------------------------------------------------
+    fig, (ax_stea, ax_ofspn) = plt.subplots(2, 1, figsize=(10, 12))
+    stea_is_manipulated = False
+
+    if "EgoSteaProc_agFA_Whl" in mf4_data.columns and "EgoStea_agFA_WhlRaw" in mf4_data.columns:
+        if any(abs(mf4_data["EgoSteaProc_agFA_Whl"] - mf4_data["EgoStea_agFA_WhlRaw"]) >= 0.005):
+            ax_stea.plot(mf4_data['time'], mf4_data['EgoSteaProc_agFA_Whl'], label='EgoSteaProc_agFA_Whl')
+            ax_stea.plot(mf4_data['time'], mf4_data['EgoStea_agFA_WhlRaw'], label='EgoStea_agFA_WhlRaw')
+            stea_is_manipulated = True
+    if "EgoStea_agFA_WhlOfs" in mf4_data.columns:
+        if any(abs(np.diff(mf4_data["EgoStea_agFA_WhlOfs"])) >= 0.001):
+            ax_stea.plot(mf4_data['time'], mf4_data['EgoStea_agFA_WhlOfs'], label='EgoStea_agFA_WhlOfs')
+            stea_is_manipulated = True
+    if "EgoStea_agFA_WhlOfsLt" in mf4_data.columns:
+        if any(abs(np.diff(mf4_data["EgoStea_agFA_WhlOfsLt"])) >= 0.001):
+            ax_stea.plot(mf4_data['time'], mf4_data['EgoStea_agFA_WhlOfsLt'], label='EgoStea_agFA_WhlOfsLt')
+            stea_is_manipulated = True
+    if "EgoStea_agFA_WhlOfsPni" in mf4_data.columns:
+        if any(abs(np.diff(mf4_data["EgoStea_agFA_WhlOfsPni"])) >= 0.1):
+            ax_ofspn.plot(mf4_data['time'], mf4_data['EgoStea_agFA_WhlOfsPni'], label='EgoStea_agFA_WhlOfsPni')
+            stea_is_manipulated = True
+
+    # if "EgoStea_agFA_WhlOfsPsid" in mf4_data.columns:
+    #     if any(abs(np.diff(mf4_data["EgoStea_agFA_WhlOfsPsid"])) >= 0.001):
+    #         ax_ofspn.plot(mf4_data['time'], mf4_data['EgoStea_agFA_WhlOfsPsid'], label='EgoStea_agFA_WhlOfsPsid')
+    #         stea_is_manipulated = True
+
+    if stea_is_manipulated:
+        ax_stea.set_xlabel("Time (s)")
+        ax_stea.set_ylabel("Steering angle (rad)")
+        ax_stea.legend()
+        ax_stea.grid()
+
+        ax_ofspn.set_xlabel("Time (s)")
+        ax_ofspn.set_ylabel("EgoStea_agFA_WhlOfsPni (no unit)")
+        ax_ofspn.legend()
+        ax_ofspn.grid()
+        
+        stea_buf = io.BytesIO()
+        fig.savefig(stea_buf, format='png')
+        plt.close(fig)
+        plot_buf.append(stea_buf)
+    # Check whether steering wheel is manipulated ------------------------------------------------------------------
+    
     return {
         "filename": filename,
         "plot": plot_buf,
@@ -553,7 +604,7 @@ def create_word_document(analysis_data_list, manipulated_signals_data_list, outp
                 doc.add_picture(plot_buf, width=Inches(6))
                 doc.add_paragraph()
         
-        if manipulated_signals_data["plot"] is not None:
+        if len(manipulated_signals_data["plot"]) > 0:
             doc.add_paragraph('Manipulated Signals:')
             for plot_buf in manipulated_signals_data["plot"]:
                 plot_buf.seek(0)
