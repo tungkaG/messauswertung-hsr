@@ -116,7 +116,16 @@ def extract_data(filename, convert=False):
         'EgoStea_agFA_WhlOfsLt',
         'EgoStea_agFA_WhlOfsPni',
         'EgoStea_agFA_WhlOfsPsid',
-        
+
+        # Slip angle
+        'SnsMobsAdj_alphaFL_Act',
+        'SnsMobsAdj_alphaFR_Act',
+        'SnsMobsAdj_alphaRL_Act',
+        'SnsMobsAdj_alphaRR_Act',
+        'EgoOut_alpha_Act_rc.EgoOut_alphaFL_Act',
+        'EgoOut_alpha_Act_rc.EgoOut_alphaFR_Act',
+        'EgoOut_alpha_Act_rc.EgoOut_alphaRL_Act',
+        'EgoOut_alpha_Act_rc.EgoOut_alphaRR_Act',
     ]
 
     mappedSignals = {}
@@ -579,6 +588,74 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         plt.close(fig)
         plot_buf.append(stea_buf)
     # Check whether steering wheel is manipulated ------------------------------------------------------------------
+
+    # Check whether alpha (slip angle) is manipulated ---------------------------------------------------------------
+        #     'SnsMobsAdj_alphaFL_Act',
+        # 'SnsMobsAdj_alphaFR_Act',
+        # 'SnsMobsAdj_alphaRL_Act',
+        # 'SnsMobsAdj_alphaRR_Act',
+        # 'EgoOut_alpha_Act_rcEgoOut_alphaFL_Act',
+        # 'EgoOut_alpha_Act_rcEgoOut_alphaFR_Act',
+        # 'EgoOut_alpha_Act_rcEgoOut_alphaRL_Act',
+        # 'EgoOut_alpha_Act_rcEgoOut_alphaRR_Act',
+    fig_alpha, ax_alpha = plt.subplots(2, 2, figsize=(10, 12))
+    alpha_is_manipulated = False
+
+    # Plot for Front Left (FL)
+    if "SnsMobsAdj_alphaFL_Act" in mf4_data.columns and "EgoOut_alpha_Act_rc.EgoOut_alphaFL_Act" in mf4_data.columns:
+        if any(abs(mf4_data["SnsMobsAdj_alphaFL_Act"] - mf4_data["EgoOut_alpha_Act_rc.EgoOut_alphaFL_Act"]) >= 0.05):
+            ax_alpha[0, 0].plot(mf4_data['time'], mf4_data['SnsMobsAdj_alphaFL_Act'], label='SnsMobsAdj_alphaFL_Act')
+            ax_alpha[0, 0].plot(mf4_data['time'], mf4_data['EgoOut_alpha_Act_rc.EgoOut_alphaFL_Act'], label='EgoOut_alpha_Act_rc.EgoOut_alphaFL_Act')
+            ax_alpha[0, 0].set_title("Front Left (FL)")
+            ax_alpha[0, 0].set_xlabel("Time (s)")
+            ax_alpha[0, 0].set_ylabel("Alpha (rad)")
+            ax_alpha[0, 0].legend()
+            ax_alpha[0, 0].grid()
+            alpha_is_manipulated = True
+
+    # Plot for Front Right (FR)
+    if "SnsMobsAdj_alphaFR_Act" in mf4_data.columns and "EgoOut_alpha_Act_rc.EgoOut_alphaFR_Act" in mf4_data.columns:
+        if any(abs(mf4_data["SnsMobsAdj_alphaFR_Act"] - mf4_data["EgoOut_alpha_Act_rc.EgoOut_alphaFR_Act"]) >= 0.05):
+            ax_alpha[0, 1].plot(mf4_data['time'], mf4_data['SnsMobsAdj_alphaFR_Act'], label='SnsMobsAdj_alphaFR_Act')
+            ax_alpha[0, 1].plot(mf4_data['time'], mf4_data['EgoOut_alpha_Act_rc.EgoOut_alphaFR_Act'], label='EgoOut_alpha_Act_rc.EgoOut_alphaFR_Act')
+            ax_alpha[0, 1].set_title("Front Right (FR)")
+            ax_alpha[0, 1].set_xlabel("Time (s)")
+            ax_alpha[0, 1].set_ylabel("Alpha (rad)")
+            ax_alpha[0, 1].legend()
+            ax_alpha[0, 1].grid()
+            alpha_is_manipulated = True
+
+    # Plot for Rear Left (RL)
+    if "SnsMobsAdj_alphaRL_Act" in mf4_data.columns and "EgoOut_alpha_Act_rc.EgoOut_alphaRL_Act" in mf4_data.columns:
+        if any(abs(mf4_data["SnsMobsAdj_alphaRL_Act"] - mf4_data["EgoOut_alpha_Act_rc.EgoOut_alphaRL_Act"]) >= 0.05):
+            ax_alpha[1, 0].plot(mf4_data['time'], mf4_data['SnsMobsAdj_alphaRL_Act'], label='SnsMobsAdj_alphaRL_Act')
+            ax_alpha[1, 0].plot(mf4_data['time'], mf4_data['EgoOut_alpha_Act_rc.EgoOut_alphaRL_Act'], label='EgoOut_alpha_Act_rc.EgoOut_alphaRL_Act')
+            ax_alpha[1, 0].set_title("Rear Left (RL)")
+            ax_alpha[1, 0].set_xlabel("Time (s)")
+            ax_alpha[1, 0].set_ylabel("Alpha (rad)")
+            ax_alpha[1, 0].legend()
+            ax_alpha[1, 0].grid()
+            alpha_is_manipulated = True
+
+    # Plot for Rear Right (RR)
+    if "SnsMobsAdj_alphaRR_Act" in mf4_data.columns and "EgoOut_alpha_Act_rc.EgoOut_alphaRR_Act" in mf4_data.columns:
+        if any(abs(mf4_data["SnsMobsAdj_alphaRR_Act"] - mf4_data["EgoOut_alpha_Act_rc.EgoOut_alphaRR_Act"]) >= 0.05):
+            ax_alpha[1, 1].plot(mf4_data['time'], mf4_data['SnsMobsAdj_alphaRR_Act'], label='SnsMobsAdj_alphaRR_Act')
+            ax_alpha[1, 1].plot(mf4_data['time'], mf4_data['EgoOut_alpha_Act_rc.EgoOut_alphaRR_Act'], label='EgoOut_alpha_Act_rc.EgoOut_alphaRR_Act')
+            ax_alpha[1, 1].set_title("Rear Right (RR)")
+            ax_alpha[1, 1].set_xlabel("Time (s)")
+            ax_alpha[1, 1].set_ylabel("Alpha (rad)")
+            ax_alpha[1, 1].legend()
+            ax_alpha[1, 1].grid()
+            alpha_is_manipulated = True
+
+    if alpha_is_manipulated:
+        plt.tight_layout()
+        alpha_buf = io.BytesIO()
+        fig_alpha.savefig(alpha_buf, format='png')
+        plt.close(fig_alpha)
+        plot_buf.append(alpha_buf)
+    # Check whether alpha (slip angle) is manipulated ---------------------------------------------------------------
     
     return {
         "filename": filename,
