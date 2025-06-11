@@ -100,6 +100,12 @@ def extract_data(filename, convert=False):
         'EgoWhlRtab_rFR_WhlLut',
         'EgoWhlRtab_rRL_WhlLut',
         'EgoWhlRtab_rRR_WhlLut',
+
+        'EgoMobs_Mobs_vx_Act',
+        'EgoMobs_Mobs_vy_Act',
+        'DcrInEgoM_v_Act',
+        'DcrInEgoM_vx_Act',
+        'DcrInEgoM_vy_Act',  
     ]
 
     mappedSignals = {}
@@ -486,10 +492,43 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_rDyn.savefig(rDyn_buf, format='png')
         plt.close(fig_rDyn)
         plot_buf.append(rDyn_buf)
+    
     # Check whether rDyn is manipulated ----------------------------------------------------------------------
-
-    # Check whether vx or vy is manipulated
-
+    
+    # Check whether vx or vy is manipulated ------------------------------------------------------------------
+        # 'EgoMobs_Mobs_vx_Act',
+        # 'EgoMobs_Mobs_vy_Act',
+        # 'DcrInEgoM_v_Act',
+        # 'DcrInEgoM_vx_Act',
+        # 'DcrInEgoM_vy_Act',  
+    fig_v, ax_v = plt.subplots(figsize=(10, 6))
+    v_is_manipulated = False
+    if "EgoMobs_Mobs_vx_Act" in mf4_data.columns and "DcrInEgoM_vx_Act" in mf4_data.columns:
+        difference = np.abs(mf4_data["EgoMobs_Mobs_vx_Act"] - mf4_data["DcrInEgoM_vx_Act"])
+        index = np.where(np.diff(difference) >= 0.2)[0]
+        first_index = index[0] if index.size > 0 else None
+        if first_index is not None:
+            ax_v.plot(mf4_data['time'][first_index - 10:first_index + 10], mf4_data['EgoMobs_Mobs_vx_Act'][first_index - 10:first_index + 10], label='EgoMobs_Mobs_vx_Act')
+            ax_v.plot(mf4_data['time'][first_index - 10:first_index + 10], mf4_data['DcrInEgoM_vx_Act'][first_index - 10:first_index + 10], label='DcrInEgoM_vx_Act')
+            v_is_manipulated = True
+    if "EgoMobs_Mobs_vy_Act" in mf4_data.columns and "DcrInEgoM_vy_Act" in mf4_data.columns:
+        difference = np.abs(mf4_data["EgoMobs_Mobs_vy_Act"] - mf4_data["DcrInEgoM_vy_Act"])
+        index = np.where(np.diff(difference) >= 0.2)[0]
+        first_index = index[0] if index.size > 0 else None
+        if first_index is not None:
+            ax_v.plot(mf4_data['time'][first_index - 10:first_index + 10], mf4_data['EgoMobs_Mobs_vy_Act'][first_index - 10:first_index + 10], label='EgoMobs_Mobs_vx_Act')
+            ax_v.plot(mf4_data['time'][first_index - 10:first_index + 10], mf4_data['DcrInEgoM_vy_Act'][first_index - 10:first_index + 10], label='DcrInEgoM_vx_Act')
+            v_is_manipulated = True
+    if v_is_manipulated:
+        ax_v.set_xlabel("Time (s)")
+        ax_v.set_ylabel("Velocity (m/s)")
+        ax_v.legend()
+        ax_v.grid()
+        v_buf = io.BytesIO()
+        fig_v.savefig(v_buf, format='png')
+        plt.close(fig_rDyn)
+        plot_buf.append(v_buf)
+    # Check whether vx or vy is manipulated ------------------------------------------------------------------
     return {
         "filename": filename,
         "plot": plot_buf,
