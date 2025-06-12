@@ -126,6 +126,22 @@ def extract_data(filename, convert=False):
         'EgoOut_alpha_Act_rc.EgoOut_alphaFR_Act',
         'EgoOut_alpha_Act_rc.EgoOut_alphaRL_Act',
         'EgoOut_alpha_Act_rc.EgoOut_alphaRR_Act',
+
+        # ax, ay, psid
+        "EgoIn5ms_psid_Raw1",
+        "EgoIn5ms_psid_Raw2",
+        "EgoInWr_psid_Raw1",
+        "EgoInWr_psid_Raw2",
+        "EgoIn5ms_ax_Raw1",
+        "EgoIn5ms_ax_Raw2",
+        "EgoInWr_ax_Raw1",
+        "EgoInWr_ax_Raw2",
+        "EgoIn5ms_ay_Raw1",
+        "EgoIn5ms_ay_Raw2",
+        "EgoInWr_ay_Raw1",
+        "EgoInWr_ay_Raw2",
+        "DcrInEgoM_ax_Act",
+        "DCrInEgoM_ay_Act",
     ]
 
     mappedSignals = {}
@@ -590,14 +606,6 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
     # Check whether steering wheel is manipulated ------------------------------------------------------------------
 
     # Check whether alpha (slip angle) is manipulated ---------------------------------------------------------------
-        #     'SnsMobsAdj_alphaFL_Act',
-        # 'SnsMobsAdj_alphaFR_Act',
-        # 'SnsMobsAdj_alphaRL_Act',
-        # 'SnsMobsAdj_alphaRR_Act',
-        # 'EgoOut_alpha_Act_rcEgoOut_alphaFL_Act',
-        # 'EgoOut_alpha_Act_rcEgoOut_alphaFR_Act',
-        # 'EgoOut_alpha_Act_rcEgoOut_alphaRL_Act',
-        # 'EgoOut_alpha_Act_rcEgoOut_alphaRR_Act',
     fig_alpha, ax_alpha = plt.subplots(2, 2, figsize=(10, 12))
     alpha_is_manipulated = False
 
@@ -656,12 +664,70 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         plt.close(fig_alpha)
         plot_buf.append(alpha_buf)
     # Check whether alpha (slip angle) is manipulated ---------------------------------------------------------------
-    
+
+    # Check whether psid is manipulated ---------------------------------------------------------------
+    fig_psid, ax_psid = plt.subplots(figsize=(10, 6))
+    psid_is_manipulated = False
+    if "EgoIn5ms_psid_Raw1" in mf4_data.columns and "EgoInWr_psid_Raw1" in mf4_data.columns:
+        if(any(abs(np.diff(mf4_data["EgoIn5ms_psid_Raw1"] - mf4_data["EgoInWr_psid_Raw1"])) >= 0.01)):
+            ax_psid.plot(mf4_data['time'], mf4_data['EgoIn5ms_psid_Raw1'], label='EgoIn5ms_psid_Raw1')
+            ax_psid.plot(mf4_data['time'], mf4_data['EgoInWr_psid_Raw1'], label='EgoInWr_psid_Raw1')
+            psid_is_manipulated = True
+
+    if psid_is_manipulated:
+        ax_psid.set_xlabel("Time (s)")
+        ax_psid.set_ylabel("Psid (rad/s)")
+        ax_psid.legend()
+        ax_psid.grid()
+        psid_buf = io.BytesIO()
+        fig_psid.savefig(psid_buf, format='png')
+        plt.close(fig_psid)
+        plot_buf.append(psid_buf)
+    # Check whether psid is manipulated ---------------------------------------------------------------
+
+    # Check whether ax is manipulated ---------------------------------------------------------------
+    fig_ax, ax_ax = plt.subplots(figsize=(10, 6))
+    ax_is_manipulated = False
+    if "EgoIn5ms_ax_Raw1" in mf4_data.columns and "EgoInWr_ax_Raw1" in mf4_data.columns:
+        if(any(abs(np.diff(mf4_data["EgoIn5ms_ax_Raw1"] - mf4_data["EgoInWr_ax_Raw1"])) >= 0.01)):
+            ax_ax.plot(mf4_data['time'], mf4_data['EgoIn5ms_ax_Raw1'], label='EgoIn5ms_ax_Raw1')
+            ax_ax.plot(mf4_data['time'], mf4_data['EgoInWr_ax_Raw1'], label='EgoInWr_ax_Raw1')
+            ax_is_manipulated = True
+
+    if ax_is_manipulated:
+        ax_ax.set_xlabel("Time (s)")
+        ax_ax.set_ylabel("a_x (m/s^2)")
+        ax_ax.legend()
+        ax_ax.grid()
+        ax_buf = io.BytesIO()
+        fig_ax.savefig(ax_buf, format='png')
+        plt.close(fig_ax)
+        plot_buf.append(ax_buf)
+    # Check whether ax is manipulated ---------------------------------------------------------------
+
+    # Check whether ay is manipulated ---------------------------------------------------------------
+    fig_ay, ax_ay = plt.subplots(figsize=(10, 6))
+    ay_is_manipulated = False
+    if "EgoIn5ms_ay_Raw1" in mf4_data.columns and "EgoInWr_ay_Raw1" in mf4_data.columns:
+        if(any(abs(np.diff(mf4_data["EgoIn5ms_ay_Raw1"] - mf4_data["EgoInWr_ay_Raw1"])) >= 0.01)):
+            ax_ay.plot(mf4_data['time'], mf4_data['EgoIn5ms_ay_Raw1'], label='EgoIn5ms_ay_Raw1')
+            ax_ay.plot(mf4_data['time'], mf4_data['EgoInWr_ay_Raw1'], label='EgoInWr_ay_Raw1')
+            ay_is_manipulated = True
+
+    if ay_is_manipulated:
+        ax_ay.set_xlabel("Time (s)")
+        ax_ay.set_ylabel("a_y (m/s^2)")
+        ax_ay.legend()
+        ax_ay.grid()
+        ay_buf = io.BytesIO()
+        fig_ay.savefig(ay_buf, format='png')
+        plt.close(fig_ay)
+        plot_buf.append(ay_buf)
+    # Check whether ay is manipulated ---------------------------------------------------------------
     return {
         "filename": filename,
         "plot": plot_buf,
     }
-
 
 def create_word_document(analysis_data_list, manipulated_signals_data_list, output_filename):
     # Function to create a Word document with analysis results
