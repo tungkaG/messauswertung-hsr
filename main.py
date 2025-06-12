@@ -153,7 +153,7 @@ def extract_data(filename, convert=False):
         "DmcIndMs_cw_IndMs_Side",
 
         # Reibwert
-        "SnsRc_mue_ActHi"
+        "SnsRc_mue_ActHi",
 
         # ay no grav
         "DcrInEgoM_ay_ActNoGrav",
@@ -818,6 +818,38 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         plot_buf.append(muesp_buf)
     # Check whether mue split is manipulated ---------------------------------------------------------------
 
+    # Check whether Reibwert (Glasbaustein) is manipulated -------------------------------------------------
+    fig_rw, ax_rw = plt.subplots(figsize=(10, 6))
+    rw_is_manipulated = False
+    if "SnsRc_mue_ActHi" in mf4_data.columns:
+        if(any(abs(np.diff(mf4_data["SnsRc_mue_ActHi"])) >= 0.01)):
+            ax_rw.plot(mf4_data['time'], mf4_data['SnsRc_mue_ActHi'], label='SnsRc_mue_ActHi')
+            rw_is_manipulated = True
+
+    if rw_is_manipulated:
+        ax_rw.set_xlabel("Time (s)")
+        ax_rw.set_ylabel("Signal Value (-)")
+        ax_rw.legend()
+        ax_rw.grid()
+        rw_buf = io.BytesIO()
+        fig_rw.savefig(rw_buf, format='png')
+        plt.close(fig_rw)
+        plot_buf.append(rw_buf)
+    # Check whether Reibwert (Glasbaustein) is manipulated -------------------------------------------------
+
+        #     # ay no grav
+        # "DcrInEgoM_ay_ActNoGrav",
+        # "DcrInEgoM_qlsay_ActNoGrav",
+
+        # # TEE
+        # "DcrIn1ms_tqwRA_EmAct",
+        # "DcrDspIn_tqwRA_Sp",
+        # "DcrIn1ms_tqwFA_EmAct",
+        # "DcrDspIn_tqwFA_Sp",
+
+        # # vch
+        # "EgoOutWr_rc_v_Ch.EgoOut_v_Ch",
+        # "DcrInEgoE_vch_Veh",
     return {
         "filename": filename,
         "plot": plot_buf,
