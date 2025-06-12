@@ -529,26 +529,20 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
     # Check whether rDyn is manipulated -------------------------------------------------------------------
     fig_rDyn, ax_rDyn = plt.subplots(figsize=(10, 6))
     rDyn_is_manipulated = False
-    if "EgoWhlRtab_rFL_Whl" in mf4_data.columns and "EgoWhlRtab_rFL_WhlLut" in mf4_data.columns:
-        if any(abs(mf4_data["EgoWhlRtab_rFL_Whl"] - mf4_data["EgoWhlRtab_rFL_WhlLut"]) >= 0.03):
-            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rFL_Whl'], label='EgoWhlRtab_rFL_Whl')
-            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rFL_WhlLut'], label='EgoWhlRtab_rFL_WhlLut')
-            rDyn_is_manipulated = True
-    if "EgoWhlRtab_rFR_Whl" in mf4_data.columns and "EgoWhlRtab_rFR_WhlLut" in mf4_data.columns:
-        if any(abs(mf4_data["EgoWhlRtab_rFR_Whl"] - mf4_data["EgoWhlRtab_rFR_WhlLut"]) >= 0.03):
-            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rFR_Whl'], label='EgoWhlRtab_rFR_Whl')
-            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rFR_WhlLut'], label='EgoWhlRtab_rFLR_WhlLut')
-            rDyn_is_manipulated = True
-    if "EgoWhlRtab_rRL_Whl" in mf4_data.columns and "EgoWhlRtab_rRL_WhlLut" in mf4_data.columns:
-        if any(abs(mf4_data["EgoWhlRtab_rRL_Whl"] - mf4_data["EgoWhlRtab_rRL_WhlLut"]) >= 0.03):
-            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rRL_Whl'], label='EgoWhlRtab_rRL_Whl')
-            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rRL_WhlLut'], label='EgoWhlRtab_rRL_WhlLut')
-            rDyn_is_manipulated = True
-    if "EgoWhlRtab_rRR_Whl" in mf4_data.columns and "EgoWhlRtab_rRR_WhlLut" in mf4_data.columns:
-        if any(abs(mf4_data["EgoWhlRtab_rRR_Whl"] - mf4_data["EgoWhlRtab_rRR_WhlLut"]) >= 0.03):
-            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rRR_Whl'], label='EgoWhlRtab_rRR_Whl')
-            ax_rDyn.plot(mf4_data['time'], mf4_data['EgoWhlRtab_rRR_WhlLut'], label='EgoWhlRtab_rRR_WhlLut')
-            rDyn_is_manipulated = True
+
+    signal_pairs = [
+        ('EgoWhlRtab_rFL_Whl', 'EgoWhlRtab_rFL_WhlLut'),
+        ('EgoWhlRtab_rFR_Whl', 'EgoWhlRtab_rFR_WhlLut'),
+        ('EgoWhlRtab_rRL_Whl', 'EgoWhlRtab_rRL_WhlLut'),
+        ('EgoWhlRtab_rRR_Whl', 'EgoWhlRtab_rRR_WhlLut')
+    ]
+    for actual, lookup in signal_pairs:
+        if actual in mf4_data.columns and lookup in mf4_data.columns:
+            if any(abs(mf4_data[actual] - mf4_data[lookup]) >= 0.03):
+                ax_rDyn.plot(mf4_data['time'], mf4_data[actual], label=actual)
+                ax_rDyn.plot(mf4_data['time'], mf4_data[lookup], label=lookup)
+                rDyn_is_manipulated = True
+
     if rDyn_is_manipulated:
         ax_rDyn.set_xlabel("Time (s)")
         ax_rDyn.set_ylabel("rDyn (m)")
