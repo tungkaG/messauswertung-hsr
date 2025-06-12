@@ -142,6 +142,32 @@ def extract_data(filename, convert=False):
         "EgoInWr_ay_Raw2",
         "DcrInEgoM_ax_Act",
         "DCrInEgoM_ay_Act",
+
+        # mue split
+        "DmcIndMs_b_IndMs",
+        "DmcIndMs_b_IndMsSusp",
+        "DmcIndMs_b_IndMsSusp_Set",
+        "DmcIndMs_fac_IndMs",
+        "DmcIndMs_fac_IndMsSusp",
+        "DmcIndMs_cw_IndMs",
+        "DmcIndMs_cw_IndMs_Side",
+
+        # Reibwert
+        "SnsRc_mue_ActHi"
+
+        # ay no grav
+        "DcrInEgoM_ay_ActNoGrav",
+        "DcrInEgoM_qlsay_ActNoGrav",
+
+        # TEE
+        "DcrIn1ms_tqwRA_EmAct",
+        "DcrDspIn_tqwRA_Sp",
+        "DcrIn1ms_tqwFA_EmAct",
+        "DcrDspIn_tqwFA_Sp",
+
+        # vch
+        "EgoOutWr_rc_v_Ch.EgoOut_v_Ch",
+        "DcrInEgoE_vch_Veh",
     ]
 
     mappedSignals = {}
@@ -536,7 +562,7 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
     v_is_manipulated = False
     if "EgoMobs_Mobs_vx_Act" in mf4_data.columns and "DcrInEgoM_vx_Act" in mf4_data.columns:
         difference = np.abs(mf4_data["EgoMobs_Mobs_vx_Act"] - mf4_data["DcrInEgoM_vx_Act"])
-        index = np.where(np.diff(difference) >= 0.2)[0]
+        index = np.where(np.diff(difference) >= 0.5)[0]
         first_index = index[0] if index.size > 0 else None
         if first_index is not None:
             ax_v.plot(mf4_data['time'][first_index - 10:first_index + 10], mf4_data['EgoMobs_Mobs_vx_Act'][first_index - 10:first_index + 10], label='EgoMobs_Mobs_vx_Act')
@@ -544,7 +570,7 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
             v_is_manipulated = True
     if "EgoMobs_Mobs_vy_Act" in mf4_data.columns and "DcrInEgoM_vy_Act" in mf4_data.columns:
         difference = np.abs(mf4_data["EgoMobs_Mobs_vy_Act"] - mf4_data["DcrInEgoM_vy_Act"])
-        index = np.where(np.diff(difference) >= 0.2)[0]
+        index = np.where(np.diff(difference) >= 0.5)[0]
         first_index = index[0] if index.size > 0 else None
         if first_index is not None:
             ax_v.plot(mf4_data['time'][first_index - 10:first_index + 10], mf4_data['EgoMobs_Mobs_vy_Act'][first_index - 10:first_index + 10], label='EgoMobs_Mobs_vx_Act')
@@ -724,6 +750,74 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         plt.close(fig_ay)
         plot_buf.append(ay_buf)
     # Check whether ay is manipulated ---------------------------------------------------------------
+
+    # Check whether mue split is manipulated ---------------------------------------------------------------
+    fig_muesp, ax_muesp = plt.subplots(2, 1, figsize=(10, 6))
+    muesp_is_manipulated = False
+    if "DmcIndMs_b_IndMs" in mf4_data.columns:
+        if any(mf4_data["DmcIndMs_b_IndMs"] != b'false'):
+            ax_muesp[0].plot(mf4_data['time'], mf4_data['DmcIndMs_b_IndMs'], label='DmcIndMs_b_IndMs')
+            ax_muesp[0].set_xlabel("Time (s)")
+            ax_muesp[0].set_ylabel("Signal Value (bool)")
+            ax_muesp[0].legend()
+            ax_muesp[0].grid()
+            muesp_is_manipulated = True
+    if "DmcIndMs_b_IndMsSusp" in mf4_data.columns:
+        if any(mf4_data["DmcIndMs_b_IndMsSusp"] != b'false'):
+            ax_muesp[0].plot(mf4_data['time'], mf4_data['DmcIndMs_b_IndMsSusp'], label='DmcIndMs_b_IndMsSusp')
+            ax_muesp[0].set_xlabel("Time (s)")
+            ax_muesp[0].set_ylabel("Signal Value (bool)")
+            ax_muesp[0].legend()
+            ax_muesp[0].grid()
+            muesp_is_manipulated = True
+    if "DmcIndMs_b_IndMsSusp_Set" in mf4_data.columns:
+        if any(mf4_data["DmcIndMs_b_IndMsSusp_Set"] != b'false'):
+            ax_muesp[0].plot(mf4_data['time'], mf4_data['DmcIndMs_b_IndMsSusp_Set'], label='DmcIndMs_b_IndMsSusp_Set')
+            ax_muesp[0].set_xlabel("Time (s)")
+            ax_muesp[0].set_ylabel("Signal Value (bool)")
+            ax_muesp[0].legend()
+            ax_muesp[0].grid()
+            muesp_is_manipulated = True
+    if "DmcIndMs_fac_IndMs" in mf4_data.columns:
+        if(any(abs(np.diff(mf4_data["DmcIndMs_fac_IndMs"]))) > 0):
+            ax_muesp[1].plot(mf4_data['time'], mf4_data['DmcIndMs_fac_IndMs'], label='DmcIndMs_fac_IndMs')
+            ax_muesp[1].set_xlabel("Time (s)")
+            ax_muesp[1].set_ylabel("Signal Value (-)")
+            ax_muesp[1].legend()
+            ax_muesp[1].grid()
+            muesp_is_manipulated = True
+    if "DmcIndMs_fac_IndMsSusp" in mf4_data.columns:
+        if(any(abs(np.diff(mf4_data["DmcIndMs_fac_IndMsSusp"]))) > 0):
+            ax_muesp[1].plot(mf4_data['time'], mf4_data['DmcIndMs_fac_IndMsSusp'], label='DmcIndMs_fac_IndMsSusp')
+            ax_muesp[1].set_xlabel("Time (s)")
+            ax_muesp[1].set_ylabel("Signal Value (-)")
+            ax_muesp[1].legend()
+            ax_muesp[1].grid()
+            muesp_is_manipulated = True
+    if "DmcIndMs_cw_IndMs" in mf4_data.columns:
+        if(any(abs(np.diff(mf4_data["DmcIndMs_cw_IndMs"]))) > 0):
+            ax_muesp[1].plot(mf4_data['time'], mf4_data['DmcIndMs_cw_IndMs'], label='DmcIndMs_cw_IndMs')
+            ax_muesp[1].set_xlabel("Time (s)")
+            ax_muesp[1].set_ylabel("Signal Value (-)")
+            ax_muesp[1].legend()
+            ax_muesp[1].grid()
+            muesp_is_manipulated = True
+    if "DmcIndMs_cw_IndMs_Side" in mf4_data.columns:
+        if(any(abs(np.diff(mf4_data["DmcIndMs_cw_IndMs_Side"]))) > 0):
+            ax_muesp[1].plot(mf4_data['time'], mf4_data['DmcIndMs_cw_IndMs_Side'], label='DmcIndMs_cw_IndMs_Side')
+            ax_muesp[1].set_xlabel("Time (s)")
+            ax_muesp[1].set_ylabel("Signal Value (-)")
+            ax_muesp[1].legend()
+            ax_muesp[1].grid()
+            muesp_is_manipulated = True
+
+    if muesp_is_manipulated:
+        muesp_buf = io.BytesIO()
+        fig_muesp.savefig(muesp_buf, format='png')
+        plt.close(fig_muesp)
+        plot_buf.append(muesp_buf)
+    # Check whether mue split is manipulated ---------------------------------------------------------------
+
     return {
         "filename": filename,
         "plot": plot_buf,
