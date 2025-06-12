@@ -141,7 +141,7 @@ def extract_data(filename, convert=False):
         "EgoInWr_ay_Raw1",
         "EgoInWr_ay_Raw2",
         "DcrInEgoM_ax_Act",
-        "DCrInEgoM_ay_Act",
+        "DcrInEgoM_ay_Act",
 
         # mue split
         "DmcIndMs_b_IndMs",
@@ -160,10 +160,14 @@ def extract_data(filename, convert=False):
         "DcrInEgoM_qlsay_ActNoGrav",
 
         # TEE
-        "DcrIn1ms_tqwRA_EmAct",
-        "DcrDspIn_tqwRA_Sp",
-        "DcrIn1ms_tqwFA_EmAct",
-        "DcrDspIn_tqwFA_Sp",
+        "DcrTql_tqwFA_EmMaxDyn",
+        "DcrTql_tqwFA_EmMaxStat",
+        "DcrTql_tqwFA_EmMinDyn",
+        "DcrTql_tqwFA_EmMinStat",
+        "DcrTql_tqwRA_EmMaxDyn",
+        "DcrTql_tqwRA_EmMaxStat",
+        "DcrTql_tqwRA_EmMinDyn",
+        "DcrTql_tqwRA_EmMinStat",
 
         # vch
         "EgoOutWr_rc_v_Ch.EgoOut_v_Ch",
@@ -554,7 +558,6 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_rDyn.savefig(rDyn_buf, format='png')
         plt.close(fig_rDyn)
         plot_buf.append(rDyn_buf)
-    
     # Check whether rDyn is manipulated ----------------------------------------------------------------------
     
     # Check whether vx or vy is manipulated ------------------------------------------------------------------
@@ -822,7 +825,7 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
     fig_rw, ax_rw = plt.subplots(figsize=(10, 6))
     rw_is_manipulated = False
     if "SnsRc_mue_ActHi" in mf4_data.columns:
-        if(any(abs(np.diff(mf4_data["SnsRc_mue_ActHi"])) >= 0.01)):
+        if(any(abs(np.diff(mf4_data["SnsRc_mue_ActHi"])) >= 0.1)):
             ax_rw.plot(mf4_data['time'], mf4_data['SnsRc_mue_ActHi'], label='SnsRc_mue_ActHi')
             rw_is_manipulated = True
 
@@ -837,19 +840,71 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         plot_buf.append(rw_buf)
     # Check whether Reibwert (Glasbaustein) is manipulated -------------------------------------------------
 
-        #     # ay no grav
-        # "DcrInEgoM_ay_ActNoGrav",
-        # "DcrInEgoM_qlsay_ActNoGrav",
+    # Check whether ay no grav is manipulated -------------------------------------------------
+    fig_ay_no_grav, ax_ay_no_grav = plt.subplots(figsize=(10, 6))
+    ay_no_grav_is_manipulated = False
+    if "DcrInEgoM_ay_ActNoGrav" in mf4_data.columns and "DcrInEgoM_ay_Act" in mf4_data.columns:
+        if any((mf4_data["DcrInEgoM_ay_ActNoGrav"] == 0) & (mf4_data["DcrInEgoM_ay_Act"] != 0)):
+            ax_ay_no_grav.plot(mf4_data['time'], mf4_data['DcrInEgoM_ay_ActNoGrav'], label='DcrInEgoM_ay_ActNoGrav')
+            ay_no_grav_is_manipulated = True
+    if ay_no_grav_is_manipulated:
+        ax_ay_no_grav.set_xlabel("Time (s)")
+        ax_ay_no_grav.set_ylabel("a_y_no_grav (m/s^2)")
+        ax_ay_no_grav.legend()
+        ax_ay_no_grav.grid()
+        ay_no_grav_buf = io.BytesIO()
+        fig_ay_no_grav.savefig(ay_no_grav_buf, format='png')
+        plt.close(fig_ay_no_grav)
+        plot_buf.append(ay_no_grav_buf)
+    # Check whether ay no grav is manipulated -------------------------------------------------
 
-        # # TEE
-        # "DcrIn1ms_tqwRA_EmAct",
-        # "DcrDspIn_tqwRA_Sp",
-        # "DcrIn1ms_tqwFA_EmAct",
-        # "DcrDspIn_tqwFA_Sp",
+    # Check whether TEE is manipulated -------------------------------------------------
+    fig_tee, ax_tee = plt.subplots(figsize=(10, 6))
+    tee_is_manipulated = False
+    signal_names = [
+        "DcrTql_tqwFA_EmMaxDyn",
+        "DcrTql_tqwFA_EmMaxStat",
+        "DcrTql_tqwFA_EmMinDyn",
+        "DcrTql_tqwFA_EmMinStat",
+        "DcrTql_tqwRA_EmMaxDyn",
+        "DcrTql_tqwRA_EmMaxStat",
+        "DcrTql_tqwRA_EmMinDyn",
+        "DcrTql_tqwRA_EmMinStat"
+    ]
+    for signal in signal_names:
+        if signal in mf4_data.columns:
+            if all(mf4_data[signal] == 0) or any((abs(np.diff(mf4_data[signal])) >= 10) & (mf4_data[signal][1:] == 0)):
+                ax_tee.plot(mf4_data['time'], mf4_data[signal], label=signal)
+                tee_is_manipulated = True
+    if tee_is_manipulated:
+        ax_tee.set_xlabel("Time (s)")
+        ax_tee.set_ylabel("Moment (Nm)")
+        ax_tee.legend()
+        ax_tee.grid()
+        tee_buf = io.BytesIO()
+        fig_tee.savefig(tee_buf, format='png')
+        plt.close(fig_tee)
+        plot_buf.append(tee_buf)
+    # Check whether TEE is manipulated -------------------------------------------------
 
-        # # vch
-        # "EgoOutWr_rc_v_Ch.EgoOut_v_Ch",
-        # "DcrInEgoE_vch_Veh",
+    # # Check whether vch is manipulated -------------------------------------------------
+    # fig_vch, ax_vch = plt.subplots(figsize=(10, 6))
+    # vch_is_manipulated = False
+    # if "EgoOutWr_rc_v_Ch.EgoOut_v_Ch" in mf4_data.columns and "DcrInEgoE_vch_Veh" in mf4_data.columns:
+    #     if(any(abs(np.diff(mf4_data["EgoOutWr_rc_v_Ch.EgoOut_v_Ch"] - mf4_data["DcrInEgoE_vch_Veh"])) >= 0.01)):
+    #         ax_vch.plot(mf4_data['time'], mf4_data['EgoOutWr_rc_v_Ch.EgoOut_v_Ch'], label='EgoOutWr_rc_v_Ch.EgoOut_v_Ch')
+    #         ax_vch.plot(mf4_data['time'], mf4_data['DcrInEgoE_vch_Veh'], label='DcrInEgoE_vch_Veh')
+    #         vch_is_manipulated = True
+    # if vch_is_manipulated:
+    #     ax_vch.set_xlabel("Time (s)")
+    #     ax_vch.set_ylabel("Signal Value (-)")
+    #     ax_vch.legend()
+    #     ax_vch.grid()
+    #     vch_buf = io.BytesIO()
+    #     fig_vch.savefig(vch_buf, format='png')
+    #     plt.close(fig_vch)
+    #     plot_buf.append(vch_buf)
+    # # Check whether vch is manipulated -------------------------------------------------
     return {
         "filename": filename,
         "plot": plot_buf,
