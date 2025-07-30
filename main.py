@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from asammdf import MDF
 from docx import Document
-from docx.shared import Inches
+from docx.shared import Inches, RGBColor
 import io
 import tkinter as tk
 from tkinter import filedialog, messagebox, Listbox
@@ -525,6 +525,7 @@ def process_mf4_analysis_data(mf4_data, filename, progress_listbox):
 
 def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
     plot_buf = []
+    manipulation_identified = False
 
     # Function to process the manipulated signals data
     if mf4_data is None or mf4_data.empty:
@@ -560,6 +561,8 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_rDyn.savefig(rDyn_buf, format='png')
         plt.close(fig_rDyn)
         plot_buf.append(rDyn_buf)
+
+        manipulation_identified = True
     else:
         plt.close(fig_rDyn)
     # Check whether rDyn is manipulated ----------------------------------------------------------------------
@@ -605,6 +608,10 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_v.savefig(v_buf, format='png')
         plt.close(fig_rDyn)
         plot_buf.append(v_buf)
+
+        manipulation_identified = True
+    else:
+        plt.close(fig_v)
     # Check whether vx or vy is manipulated ------------------------------------------------------------------
     
     # Check whether steering angle is manipulated -----------------------------------------------------------------
@@ -644,6 +651,10 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_stea.savefig(stea_buf, format='png')
         plt.close(fig_stea)
         plot_buf.append(stea_buf)
+
+        manipulation_identified = True
+    else:
+        plt.close(fig_stea)
     # Check whether steering wheel is manipulated ------------------------------------------------------------------
 
     # Check whether alpha (slip angle) is manipulated ---------------------------------------------------------------
@@ -704,6 +715,10 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_alpha.savefig(alpha_buf, format='png')
         plt.close(fig_alpha)
         plot_buf.append(alpha_buf)
+
+        manipulation_identified = True
+    else:
+        plt.close(fig_alpha)
     # Check whether alpha (slip angle) is manipulated ---------------------------------------------------------------
 
     # Check whether psid is manipulated ---------------------------------------------------------------
@@ -725,6 +740,10 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_psid.savefig(psid_buf, format='png')
         plt.close(fig_psid)
         plot_buf.append(psid_buf)
+
+        manipulation_identified = True
+    else:
+        plt.close(fig_psid)
     # Check whether psid is manipulated ---------------------------------------------------------------
 
     # Check whether ax is manipulated ---------------------------------------------------------------
@@ -746,6 +765,10 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_ax.savefig(ax_buf, format='png')
         plt.close(fig_ax)
         plot_buf.append(ax_buf)
+
+        manipulation_identified = True
+    else:
+        plt.close(fig_ax)
     # Check whether ax is manipulated ---------------------------------------------------------------
 
     # Check whether ay is manipulated ---------------------------------------------------------------
@@ -766,6 +789,10 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_ay.savefig(ay_buf, format='png')
         plt.close(fig_ay)
         plot_buf.append(ay_buf)
+
+        manipulation_identified = True
+    else:
+        plt.close(fig_ay)
     # Check whether ay is manipulated ---------------------------------------------------------------
 
     # Check whether mue split is manipulated ---------------------------------------------------------------
@@ -801,6 +828,10 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_muesp_1.savefig(muesp1_buf, format='png')
         plt.close(fig_muesp_1)
         plot_buf.append(muesp1_buf)
+
+        manipulation_identified = True
+    else:
+        plt.close(fig_muesp_1)
 
     fig_muesp_2, ax_muesp_2 = plt.subplots(figsize=(10, 6))
     muesp2_is_manipulated = False
@@ -842,6 +873,10 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_muesp_2.savefig(muesp2_buf, format='png')
         plt.close(fig_muesp_2)
         plot_buf.append(muesp2_buf)
+
+        manipulation_identified = True
+    else:
+        plt.close(fig_muesp_2)
     # Check whether mue split is manipulated ---------------------------------------------------------------
 
     # Check whether Reibwert (Glasbaustein) is manipulated -------------------------------------------------
@@ -862,6 +897,10 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_rw.savefig(rw_buf, format='png')
         plt.close(fig_rw)
         plot_buf.append(rw_buf)
+
+        manipulation_identified = True
+    else:
+        plt.close(fig_rw)
     # Check whether Reibwert (Glasbaustein) is manipulated -------------------------------------------------
 
     # Check whether ay no grav is manipulated -------------------------------------------------
@@ -880,6 +919,10 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_ay_no_grav.savefig(ay_no_grav_buf, format='png')
         plt.close(fig_ay_no_grav)
         plot_buf.append(ay_no_grav_buf)
+        
+        manipulation_identified = True
+    else:
+        plt.close(fig_ay_no_grav)
     # Check whether ay no grav is manipulated -------------------------------------------------
 
     # Check whether TEE is manipulated -------------------------------------------------
@@ -918,6 +961,8 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         plt.close(fig_tee_fa)
         plot_buf.append(tee_fa_buf)
 
+        manipulation_identified = True
+
     # Plot RA signals if all are always zero
     ra_all_zero = all(
         signal in mf4_data.columns and np.all(mf4_data[signal] == 0)
@@ -937,6 +982,9 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
         fig_tee_ra.savefig(tee_ra_buf, format='png')
         plt.close(fig_tee_ra)
         plot_buf.append(tee_ra_buf)
+
+        manipulation_identified = True
+
     # Check whether TEE is manipulated -------------------------------------------------
 
     # # Check whether vch is manipulated -------------------------------------------------
@@ -956,10 +1004,13 @@ def process_mf4_manipulated_signals_data(mf4_data, filename, progress_listbox):
     #     fig_vch.savefig(vch_buf, format='png')
     #     plt.close(fig_vch)
     #     plot_buf.append(vch_buf)
+    # CLOSE PLOT AND dont forget manipulation_identified
     # # Check whether vch is manipulated -------------------------------------------------
+
     return {
         "filename": filename,
         "plot": plot_buf,
+        "manipulation_identified": manipulation_identified,
     }
 
 def create_word_document(analysis_data_list, manipulated_signals_data_list, output_filename):
@@ -968,7 +1019,14 @@ def create_word_document(analysis_data_list, manipulated_signals_data_list, outp
     doc.add_heading('MF4 Data Analysis', 0)
 
     for (analysis_data, manipulated_signals_data) in zip(analysis_data_list, manipulated_signals_data_list):
-        doc.add_heading(f'File Analysis: {os.path.basename(analysis_data["filename"])}', level=1)
+
+        if not manipulated_signals_data["manipulation_identified"]:
+            heading = doc.add_heading(level=1)
+            run = heading.add_run(f'Unknown manipulation in File: {os.path.basename(analysis_data["filename"])}')
+            run.bold = True  # Make text bold
+            run.font.color.rgb = RGBColor(255, 0, 0)  # Make text red
+        else:
+            doc.add_heading(f'File: {os.path.basename(analysis_data["filename"])}', level=1)
 
         if analysis_data["warning"] is not None:
             for warning in analysis_data["warning"]:
@@ -1047,7 +1105,12 @@ def select_folder_and_process():
                 manipulated_signals_data_list.append(manipulated_signals_data)
 
     if len(analysis_data_list) > 0 and len(manipulated_signals_data_list) > 0:
-        output_filename = os.path.join(folder_path, "MF4_Analysis_Report.docx")
+        output_filename = os.path.join(folder_path, "SWD_Analysis_Report.docx")
+        for manipulated_signals_data in manipulated_signals_data_list:
+            if not manipulated_signals_data["manipulation_identified"]:
+                output_filename = os.path.join(folder_path, "SWD_Analysis_Report_invalidManip.docx")
+                break
+
         create_word_document(analysis_data_list, manipulated_signals_data_list,output_filename)
         progress_listbox.insert(tk.END, f"Analysis complete. Report saved to:\n{os.path.abspath(output_filename)}")
         messagebox.showinfo("Success", f"Analysis complete. Report saved to:\n{os.path.abspath(output_filename)}")
